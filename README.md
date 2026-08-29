@@ -26,6 +26,45 @@
 - [uv](https://docs.astral.sh/uv/) 包管理器
 - 管理员权限（内存读写需要）
 
+## LLM 配置（OpenAI 协议统一）
+
+本项目 LLM 层**仅支持 OpenAI 协议**（`/v1/chat/completions`）。国内模型
+（Kimi / DeepSeek / 通义 Qwen / 智谱 GLM / 豆包 等）与各类网关、本地推理
+（vLLM / Ollama openai 模式）均兼容该协议，由 OpenAI 官方 Python SDK 驱动。
+
+```powershell
+# 方式一：图形界面（主推）
+winreverse gui
+#   Base URL:  OpenAI 协议兼容端点，如 https://api.moonshot.cn/v1
+#              留空则用 OpenAI 官方端点（国内直连通常不可达）
+#   Model:     模型 ID，如 kimi-k2 / deepseek-chat / qwen-plus / glm-4
+#   API Key:   对应平台的 key（可留空走环境变量 OPENAI_API_KEY）
+
+# 方式二：配置文件（便携包 = exe 旁 config.toml；源码 = cwd 或 ~/.winreverse/config.toml）
+# [llm]
+# provider = "openai"
+# model = "kimi-k2"
+# base_url = "https://api.moonshot.cn/v1"
+# api_key = "..."
+
+# 方式三：环境变量
+set OPENAI_API_KEY=sk-xxx
+```
+
+常见兼容端点示例：
+
+| 平台 | Base URL | 示例模型 |
+|------|----------|---------|
+| Kimi（月之暗面） | `https://api.moonshot.cn/v1` | kimi-k2 |
+| DeepSeek | `https://api.deepseek.com/v1` | deepseek-chat |
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | qwen-plus |
+| 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | glm-4 |
+| Ollama（本地） | `http://127.0.0.1:11434/v1` | 任意本地模型 |
+
+故障排查：事件日志/终端若报「无法连接 LLM 端点」，优先核对 Base URL
+（国内直连 api.openai.com 通常不可达）与网络/代理；`winreverse doctor`
+可自检环境，`winreverse gui` 可重配。
+
 ## 快速开始
 
 ### 开发环境配置
