@@ -1,0 +1,45 @@
+# 自动锁定血量 — 游戏逆向经典场景
+# 通过内存扫描定位血量地址并循环写入固定值，防止角色死亡
+name: "自动锁定血量"
+description: "自动搜索并锁定当前游戏的血量地址，防止角色死亡。"
+target: "通用游戏"
+
+parameters:
+  - name: "process_name"
+    type: "string"
+    default: "game.exe"
+    description: "目标游戏进程名（如 game.exe）"
+    required: true
+  - name: "lock_value"
+    type: "int"
+    default: 999
+    description: "锁定的血量数值"
+    required: false
+
+prompt_template: |
+  任务：锁定游戏血量。
+  目标进程：{{process_name}}
+  锁定数值：{{lock_value}}
+
+  执行步骤：
+  1. 使用 memory.attach 附加进程 {{process_name}}，获取 pid。
+  2. 提示用户输入当前血量数值，调用 memory.read 进行首次扫描定位候选地址。
+  3. 提示用户改变血量（掉血或回血），对候选地址再次扫描，缩小范围。
+  4. 循环步骤 3 直到找到唯一基址。
+  5. 调用 memory.write 将 {{lock_value}} 写入血量地址，循环刷新保持锁定。
+
+  注意事项：
+  - 附加进程需要管理员权限。
+  - 锁定循环间隔建议 100ms，避免占用过多 CPU。
+  - 若扫描无结果，提示用户检查进程名或血量数值是否正确。
+
+execution_flow:
+  - action: "memory.attach"
+    args:
+      process_name: "{{process_name}}"
+  - action: "memory.read"
+    args:
+      type: "int"
+  - action: "memory.write"
+    args:
+      value: "{{lock_value}}"

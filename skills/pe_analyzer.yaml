@@ -1,0 +1,59 @@
+# PE 文件分析 — 静态分析 Windows 可执行文件
+# 解析 PE 结构、导入表、节区，检测可疑 API，反汇编入口点
+name: "PE 文件分析"
+description: "解析 PE 文件结构，提取导入表/导出表/节区，检测可疑 API，识别壳与编译器。"
+target: "PE 文件"
+
+parameters:
+  - name: "file_path"
+    type: "string"
+    description: "待分析的 PE 文件路径（.exe / .dll）"
+    required: true
+  - name: "deep_scan"
+    type: "bool"
+    default: false
+    description: "是否启用 DIE 深度扫描（更慢但更准确）"
+    required: false
+
+prompt_template: |
+  任务：分析 PE 文件 {{file_path}}。
+  深度扫描：{{deep_scan}}
+
+  执行步骤：
+  1. 使用 pe.parse 解析 PE 文件，提取入口点、位数、imphash、节区数等元信息。
+  2. 使用 pe.imports 列出导入表，识别依赖的 DLL 与函数。
+  3. 使用 pe.suspicious_imports 检测可疑 API（如 WriteProcessMemory、CreateRemoteThread）。
+  4. 使用 pe.exports 列出导出表（DLL 场景）。
+  5. 使用 pe.sections 列出节区，检查异常节区名（如 .packed、UPX0）。
+  6. 使用 die.scan_file 识别壳/编译器/语言，deep={{deep_scan}}。
+  7. 使用 disasm 反汇编入口点前 64 字节，初步判断代码特征。
+  8. 输出综合分析报告：
+     - 文件元信息（位数、imphash、入口点）
+     - 导入表摘要（按 DLL 分组）
+     - 可疑 API 列表与风险等级
+     - 节区异常
+     - 壳/编译器识别结果
+     - 入口点反汇编片段
+
+  注意事项：
+  - 大文件解析可能耗时，建议先 pe.parse 获取基本信息再决定后续步骤。
+  - 可疑 API 检测基于静态特征，可能存在误报（如安全软件也用 CreateRemoteThread）。
+  - DIE 深度扫描会显著增加耗时（10 倍以上）。
+
+execution_flow:
+  - action: "pe.parse"
+    args:
+      file_path: "{{file_path}}"
+  - action: "pe.imports"
+    args:
+      file_path: "{{file_path}}"
+  - action: "pe.suspicious_imports"
+    args:
+      file_path: "{{file_path}}"
+  - action: "pe.sections"
+    args:
+      file_path: "{{file_path}}"
+  - action: "die.scan_file"
+    args:
+      file_path: "{{file_path}}"
+      deep: "{{deep_scan}}"

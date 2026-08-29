@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Format check (ruff format, 替代 black)
+        run: uv run ruff format --check .
+
+      - name: Type check (mypy)
+        run: uv run mypy src/winreverse
+
+      # 注：import 排序由 ruff 内置的 I 规则统一检查，不再使用独立 isort
+
+      - name: Unit tests
+        run: uv run pytest tests/unit -q --tb=short -m "not live"
+        env:
+          WINREVERSE_TEST_MODE: "ci"

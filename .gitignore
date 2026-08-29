@@ -1,0 +1,48 @@
+# =============================================================================
+# WinReverseAgent .gitignore — 根目录白名单策略
+# 项目根最初被 System32 全目录误拷污染过，白名单法从源头防复发：
+# 根目录只允许下列条目，其余任何新增文件自动忽略。
+# =============================================================================
+
+# —— 根目录白名单（显式放行）——
+/*
+!/README.md
+!/DEVELOPMENT.md
+!/运行说明.md
+!/pyproject.toml
+!/uv.lock
+!/winreverse.spec
+!/.gitignore
+!/.python-version
+!/.github/
+!/src/
+!/tests/
+!/scripts/
+!/skills/
+!/assets/
+!/vendor/
+!/packages/
+
+# —— 忽略（白名单外的根目录与常见垃圾）——
+!/*_backup*    # 暂不启用；保持严格白名单
+
+# —— 通用忽略 ——
+dist/
+build/
+output/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+/tools/
+.bak/
+_*.py
+_*.ps1
+_*.txt
+config.toml
+*.log
+Thumbs.db
+.DS_Store

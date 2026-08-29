@@ -1,0 +1,48 @@
+# 协议分析 — 抓包并解析网络协议
+# 附加目标进程后启动 tshark 抓包，提取协议特征
+name: "协议分析"
+description: "附加目标进程并启动抓包，提取网络协议特征与封包结构。"
+target: "通用游戏"
+
+parameters:
+  - name: "process_name"
+    type: "string"
+    default: "game.exe"
+    description: "目标进程名"
+    required: true
+  - name: "port"
+    type: "int"
+    default: 0
+    description: "目标端口（0 表示捕获所有端口）"
+    required: false
+  - name: "duration"
+    type: "int"
+    default: 30
+    description: "抓包时长（秒）"
+    required: false
+
+prompt_template: |
+  任务：分析 {{process_name}} 的网络协议。
+  目标端口：{{port}}（0 表示全部）
+  抓包时长：{{duration}} 秒
+
+  执行步骤：
+  1. 使用 memory.attach 附加进程 {{process_name}}，确认进程存活。
+  2. 调用外部工具 tshark 抓包 {{duration}} 秒，过滤端口 {{port}}。
+  3. 解析抓包结果，提取协议类型（TCP/UDP）、封包长度分布、关键字段。
+  4. 识别加密流量特征（如固定头字节、心跳包间隔）。
+  5. 输出协议分析报告：协议族、封包结构、可能的加密算法。
+
+  注意事项：
+  - 抓包需要管理员权限。
+  - 端口 0 表示捕获所有流量，数据量较大时建议缩小范围。
+  - 加密流量只能识别特征，无法解密内容。
+
+execution_flow:
+  - action: "memory.attach"
+    args:
+      process_name: "{{process_name}}"
+  - action: "tshark.call"
+    args:
+      duration: "{{duration}}"
+      port: "{{port}}"

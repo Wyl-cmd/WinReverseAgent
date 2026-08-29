@@ -1,0 +1,50 @@
+from kosong.providers.descriptors import ModelDescriptor, ProviderCapabilities, ProviderDescriptor
+
+OLLAMA_DESCRIPTOR = ProviderDescriptor(
+    name="ollama",
+    display_name="Ollama",
+    api_base="http://localhost:11434/v1",
+    api_key_env="OLLAMA_API_KEY",
+    models=[
+        ModelDescriptor(
+            id="llama3.1",
+            display_name="Llama 3.1",
+            context_window=128000,
+            max_output_tokens=4096,
+            supports_tools=True,
+            supports_vision=False,
+            supports_streaming=True,
+            input_price_per_million=0.0,
+            output_price_per_million=0.0,
+        ),
+        ModelDescriptor(
+            id="codellama",
+            display_name="Code Llama",
+            context_window=16384,
+            max_output_tokens=4096,
+            supports_tools=False,
+            supports_vision=False,
+            supports_streaming=True,
+            input_price_per_million=0.0,
+            output_price_per_million=0.0,
+        ),
+        ModelDescriptor(
+            id="mistral",
+            display_name="Mistral",
+            context_window=32768,
+            max_output_tokens=4096,
+            supports_tools=True,
+            supports_vision=False,
+            supports_streaming=True,
+            input_price_per_million=0.0,
+            output_price_per_million=0.0,
+        ),
+    ],
+    capabilities=ProviderCapabilities(
+        supports_tools=True,
+        supports_vision=False,
+        supports_streaming=True,
+        supports_system_messages=True,
+        supports_prompt_caching=False,
+    ),
+)

@@ -1,0 +1,51 @@
+from kosong.providers.descriptors import ModelDescriptor, ProviderCapabilities, ProviderDescriptor
+
+ANTHROPIC_DESCRIPTOR = ProviderDescriptor(
+    name="anthropic",
+    display_name="Anthropic",
+    api_base="https://api.anthropic.com/v1",
+    api_key_env="ANTHROPIC_API_KEY",
+    models=[
+        ModelDescriptor(
+            id="claude-sonnet-4-20250514",
+            display_name="Claude Sonnet 4",
+            context_window=200000,
+            max_output_tokens=16384,
+            supports_tools=True,
+            supports_vision=True,
+            supports_streaming=True,
+            input_price_per_million=3.0,
+            output_price_per_million=15.0,
+        ),
+        ModelDescriptor(
+            id="claude-3-5-haiku-20241022",
+            display_name="Claude 3.5 Haiku",
+            context_window=200000,
+            max_output_tokens=8192,
+            supports_tools=True,
+            supports_vision=True,
+            supports_streaming=True,
+            input_price_per_million=0.8,
+            output_price_per_million=4.0,
+        ),
+        ModelDescriptor(
+            id="claude-opus-4-20250514",
+            display_name="Claude Opus 4",
+            context_window=200000,
+            max_output_tokens=16384,
+            supports_tools=True,
+            supports_vision=True,
+            supports_streaming=True,
+            input_price_per_million=15.0,
+            output_price_per_million=75.0,
+        ),
+    ],
+    capabilities=ProviderCapabilities(
+        supports_tools=True,
+        supports_vision=True,
+        supports_streaming=True,
+        supports_system_messages=True,
+        supports_prompt_caching=True,
+    ),
+    default_headers={"anthropic-version": "2023-06-01"},
+)

@@ -1,0 +1,69 @@
+# 木马内存取证速查 — 针对可疑进程的内存级排查
+# 枚举内存区域 → 全量转储 → 一键取证分析（IOC/PE 雕刻/YARA），面向无文件落地攻击
+name: "木马内存取证速查"
+description: "对可疑进程做内存取证：枚举可疑注入区域，全量转储内存，提取 IOC 与雕刻 PE，可选 YARA 规则扫描。"
+target: "可疑进程"
+
+parameters:
+  - name: "process_name"
+    type: "string"
+    default: "svchost.exe"
+    description: "目标可疑进程名（如 svchost.exe 或 PID）"
+    required: true
+  - name: "rules_path"
+    type: "string"
+    default: ""
+    description: "可选：YARA 规则文件路径（.yar/.yara），为空则跳过规则扫描"
+    required: false
+  - name: "max_total_mb"
+    type: "int"
+    default: 512
+    description: "全量转储总大小上限（MB）"
+    required: false
+
+prompt_template: |
+  任务：对可疑进程 {{process_name}} 做内存取证排查。
+  YARA 规则：{{rules_path}}
+  转储上限：{{max_total_mb}} MB
+
+  执行步骤：
+  1. 使用 memory.attach 附加进程 {{process_name}}，获取 pid。
+  2. 使用 memory.regions 枚举内存区域，重点检查可疑区域
+     （可执行私有内存 / RWX 区域是代码注入与无文件木马的强信号）。
+     若可疑区域为 0，仍建议继续转储做内容级排查。
+  3. 使用 memory.dump 全量转储内存（max_total_mb={{max_total_mb}}），记录 manifest 路径与输出目录。
+  4. 使用 memory.analyze 对转储目录做一键取证分析（rules_path 为空时不传该参数）：
+     - IOC（URL / IP / 域名 / 邮箱 / 文件路径 / 注册表键）→ 判别 C2 通信与持久化线索
+     - 高熵区域（熵 > 7.2）→ 加密配置块 / 加壳载荷 / 加密通信缓冲
+     - 雕刻出的 PE（尤其位于私有内存区域的）→ 注入的 DLL/EXE/shellcode 载体
+     - YARA 命中 → 已知家族特征
+  5. 对雕刻出的可疑 PE，使用 die.scan_file 识别编译器/壳，使用 pe.parse 查看导入表。
+  6. 输出综合取证报告：
+     - 可疑注入区域列表（地址、保护属性、大小）
+     - IOC 汇总（按类型分组，标注可能的 C2 地址与持久化路径）
+     - 雕刻 PE 清单（架构、大小、SHA256、是否截断）
+     - 高熵区域提示（可能需要进一步脱壳/解密）
+     - YARA 命中结果与家族判断
+     - 建议的后续动作（隔离、提取样本深入分析、监控网络外联）
+
+  注意事项：
+  - 附加与转储其他进程需要管理员权限。
+  - 转储会包含目标进程全部已提交内存，大进程可能产出 GB 级数据，注意磁盘空间。
+  - IOC 与字符串来自内存快照，包含大量程序自身合法字符串，需结合上下文甄别。
+  - 本流程仅用于合法安全研究与应急响应场景。
+
+execution_flow:
+  - action: "memory.attach"
+    args:
+      process_name: "{{process_name}}"
+  - action: "memory.regions"
+    args:
+      pid: "{{pid}}"
+  - action: "memory.dump"
+    args:
+      pid: "{{pid}}"
+      max_total_mb: "{{max_total_mb}}"
+  - action: "memory.analyze"
+    args:
+      dump_dir: "{{output_dir}}"
+      rules_path: "{{rules_path}}"

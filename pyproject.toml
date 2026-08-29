@@ -1,0 +1,282 @@
+# =============================================================================
+# WinReverseAgent — Windows 原生逆向 AI Agent
+# 环境基线对齐 KXNSv2：uv + hatchling + workspace + src layout
+# 增强项：ruff/mypy（import 排序由 ruff 内置 I 规则统一处理，实施方案 §1.4.1 硬约束）
+# =============================================================================
+
+[project]
+name = "winreverse-agent"
+version = "0.1.0"
+description = "Windows 原生逆向工程 AI Agent（基于 KXNS Hunter CLI v2 通用层改造）"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "WinReverseAgent Contributors" }]
+keywords = ["reverse-engineering", "windows", "ai-agent", "malware-analysis", "pe", "memory"]
+
+dependencies = [
+    # —— CLI / UI 层（对齐 KXNS）——
+    "typer>=0.12",
+    "rich>=13.7",
+    "prompt-toolkit>=3.0",
+    "textual>=0.50",
+    "pyperclip>=1.8",
+    # —— 数据 / 配置层 ——
+    "pydantic>=2.6",
+    "toml>=0.10",
+    "tomlkit>=0.12",
+    "pyyaml>=6.0",
+    # —— 通信 / 异步层 ——
+    "httpx>=0.27",
+    "aiofiles>=23.2",
+    "tenacity>=8.2",
+    # —— 日志 / 工具层 ——
+    "loguru>=0.7",
+    "psutil>=7.2.2",
+    "packaging>=23.0",
+    "typing_extensions>=4.9",
+    # —— LLM 层（workspace 包）——
+    "kosong",
+    # —— 逆向专用层（vendor wheels：doctor 校验 + 离线安装）——
+    # 注：这些包通过 vendor/wheels/ 离线安装，不写入主依赖列表
+    # 详细管理见 vendor/wheels_manifest.yaml
+    # 包含：pymem / pefile / capstone / yara-python / die-python
+]
+
+[project.optional-dependencies]
+# 逆向专用依赖（可选启用，避免首次安装污染）
+reverse = [
+    "pymem>=1.14",
+    "pefile>=2024.8.26",
+    "capstone>=5.0.9",
+    "yara-python>=4.5.4",
+    "die-python>=0.5.0",
+]
+# 木马动态分析（未来 M8 实现，GPLv2，需法务评估后启用）
+malware = [
+    "frida>=17.16.4",
+]
+# 审计工具
+audit = [
+    "semgrep>=1.60",
+    "bandit>=1.7",
+]
+
+[dependency-groups]
+dev = [
+    # —— 测试框架 ——
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "pytest-mock>=3.14",
+    "responses>=0.25",
+    # —— 代码质量工具链（实施方案 §1.4.1 硬约束）——
+    # 注：import 排序由 ruff 内置的 I 规则统一处理，不再依赖独立 isort
+    "black>=24.8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    # —— 类型存根 ——
+    "types-PyYAML>=6.0",
+    "types-toml>=0.10",
+]
+
+[project.scripts]
+winreverse = "winreverse.cli:app"
+winreverse-doctor = "winreverse.doctor:main"
+
+# =============================================================================
+# uv workspace 配置（对齐 KXNS）
+# =============================================================================
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+kosong = { workspace = true }
+
+# =============================================================================
+# 构建后端（对齐 KXNS：hatchling）
+# =============================================================================
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/winreverse"]
+
+# =============================================================================
+# 测试框架配置（对齐 KXNS + 增加覆盖率）
+# =============================================================================
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=winreverse",
+    "--cov-report=term-missing",
+    "--cov-report=html:output/coverage/html",
+    "--cov-report=xml:output/coverage/coverage.xml",
+    "--cov-fail-under=85",
+]
+markers = [
+    "live: 依赖本机服务/网络/真实工具的集成测试，CI 默认跳过",
+    "slow: 执行真实工具/网络/子进程的重负载测试，本地默认跳过（用 -m slow 单独运行）",
+    "windows_only: 仅在 Windows 平台运行的测试",
+    "requires_admin: 需要管理员权限的测试",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:textual.*",
+    "ignore::DeprecationWarning:prompt_toolkit.*",
+]
+
+# =============================================================================
+# 代码质量工具链（实施方案 §1.4.1 硬约束，KXNS 未配置，本项目增强）
+# =============================================================================
+
+# —— black：代码格式化 ——
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | vendor
+  | packages
+)/
+'''
+
+# —— ruff：Lint 检查（替代 flake8/pylint）——
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [
+    "vendor",
+    "packages",
+    "build",
+    "dist",
+    "*.md",
+    "*.yaml",
+    "*.yml",
+    "*.toml",
+    "output",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "TID",  # flake8-tidy-imports（含循环依赖检测 TID252）
+    "RUF",  # ruff 特有规则
+]
+ignore = [
+    "E501",   # 行长由 black 处理
+    "B008",   # typer 默认参数风格
+    "SIM108", # 三元表达式 vs if-else，按场景选择
+    # 允许中文全角标点（中文注释/docstring 中正常使用）
+    "RUF001",  # 字符串中的全角标点
+    "RUF002",  # docstring 中的全角标点
+    "RUF003",  # 注释中的全角标点
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011", "S101"]   # 测试中允许 assert False 与 assert
+"src/winreverse/tui/**" = ["RUF012"]  # Textual BINDINGS 类属性是标准用法
+"scripts/**" = ["E402"]  # 脚本中 sys.path.insert 后的导入
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"  # 禁止相对导入，强制绝对导入
+
+[tool.ruff.lint.isort]
+known-first-party = ["winreverse", "kosong"]
+
+# —— mypy：类型检查（strict 模式）——
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unreachable = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = false  # typer 装饰器需要
+no_implicit_optional = true
+no_implicit_reexport = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = "src"
+exclude = [
+    "vendor/",
+    "packages/",
+    "build/",
+    "dist/",
+    "tests/local/",
+]
+
+# 第三方库类型存根配置
+# 注：frida 当前阶段未启用（M8 阶段按需引入），不在此处登记
+# kosong 在 M5-2 阶段已导入 src/，添加到 overrides 解决 missing stubs 警告
+# psutil 在 M7.5 内存取证阶段按需引入（types-psutil 未纳入 dev 依赖组）
+# dearpygui 在 GUI 阶段按需引入（MIT，无类型存根）
+[[tool.mypy.overrides]]
+module = [
+    "pymem.*",
+    "pefile.*",
+    "capstone.*",
+    "yara.*",
+    "die.*",
+    "kosong.*",
+    "jinja2.*",
+    "psutil.*",
+    "dearpygui.*",
+]
+ignore_missing_imports = true
+
+# =============================================================================
+# 覆盖率配置
+# =============================================================================
+# 注：import 排序由 ruff 内置的 I 规则统一处理，不再使用独立 isort
+# 详见 [tool.ruff.lint.isort] 段
+[tool.coverage.run]
+source = ["src/winreverse"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/vendor/*",
+    "*/packages/*",
+    "src/winreverse/__main__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if sys.platform == .win32.:",
+    "@abstractmethod",
+]
+precision = 2
+show_missing = true
+skip_covered = false

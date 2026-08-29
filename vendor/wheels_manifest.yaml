@@ -1,0 +1,78 @@
+# =============================================================================
+# wheels_manifest.yaml — Python 逆向依赖 wheel 清单
+# =============================================================================
+# 用途：登记 vendor/wheels/ 下所有 wheel 的版本与 SHA256，
+#       供 doctor.py 启动时强制校验、vendor/updater.py 检查更新。
+# 校验对象：.whl 文件本身（不是解压后的 .pyd/.dll）
+# 安装方式：pip install --no-index --find-links=vendor/wheels/ <pkg>==<version>
+# 平台标签：cp312-cp312-win_amd64（项目要求 Python 3.12+ / Windows x64）
+# =============================================================================
+
+schema_version: "1.0"
+python_version: "3.12"
+platform: "win_amd64"
+
+wheels:
+  - name: pymem
+    version: "1.14.0"
+    wheel_file: "pymem-1.14.0-py3-none-any.whl"
+    sha256: "2b9cc64b49d0685f73d616ab1f638611f87e8d649869e7a556f050f677c42a7e"
+    import_name: "pymem"
+    required: true
+    notes: "Windows 内存读写（ReadProcessMemory/WriteProcessMemory 封装）"
+
+  - name: pefile
+    version: "2024.8.26"
+    wheel_file: "pefile-2024.8.26-py3-none-any.whl"
+    sha256: "76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"
+    import_name: "pefile"
+    required: true
+    notes: "PE/COFF 文件解析（导入表/导出表/节区/资源）"
+
+  - name: capstone
+    version: "5.0.9"
+    wheel_file: "capstone-5.0.9-py3-none-win_amd64.whl"
+    sha256: "732cedbbb56d42e723f14d7af6387f1454194a820b4b96b56d1e53f865ef85d0"
+    import_name: "capstone"
+    required: true
+    arch: "x86_64"
+    notes: "多架构反汇编引擎（x86/x64/ARM/ARM64）"
+
+  - name: yara-python
+    version: "4.5.4"
+    wheel_file: "yara_python-4.5.4-cp312-cp312-win_amd64.whl"
+    sha256: "bf14a8af06b2b980a889bdc3f9e8ccd6e703d2b3fa1c98da5fd3a1c3b551eb47"
+    import_name: "yara"
+    required: true
+    arch: "x86_64"
+    notes: "YARA 规则引擎 Python 绑定（恶意软件特征匹配）"
+
+  - name: die-python
+    version: "0.5.0"
+    wheel_file: "die_python-0.5.0-cp312-cp312-win_amd64.whl"
+    sha256: "3c4c62eae440b34b8200e11c8c5946399e07cae5bc355371f2145d20a950098b"
+    import_name: "die"
+    required: true
+    arch: "x86_64"
+    notes: "Detect It Easy Python 绑定（识别壳/编译器/语言）"
+
+  - name: dearpygui
+    version: "2.3.1"
+    wheel_file: "dearpygui-2.3.1-cp312-cp312-win_amd64.whl"
+    sha256: "26ed9197cdb30099c665bd1b23724e0dba60ad06b71344ecca7e52748c21874b"
+    import_name: "dearpygui"
+    required: false
+    arch: "x86_64"
+    notes: "DearPyGui（MIT）— GUI 配置界面（winreverse gui），TUI 仍为备用；缺失时仅 GUI 不可用"
+
+# 注：frida 不在初始打包范围（M8 阶段按需启用，GPLv2 + linking exception 需法务评估）
+
+update:
+  online_index: "https://pypi.org/pypi/<name>/json"
+  timeout_seconds: 10
+  # 更新流程：
+  # 1. 查询 online_index 获取最新版本
+  # 2. 下载新版本 wheel 到 vendor/wheels/
+  # 3. 重新计算 SHA256 并更新本文件
+  # 4. 删除旧版本 wheel
+  # 5. 重新运行 doctor 验证

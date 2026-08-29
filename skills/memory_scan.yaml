@@ -1,0 +1,48 @@
+# 内存扫描 — 通用内存模式搜索
+# 附加进程后扫描指定模式，定位关键数据结构
+name: "内存扫描"
+description: "附加目标进程并扫描内存模式，定位关键数据结构或字符串。"
+target: "通用"
+
+parameters:
+  - name: "process_name"
+    type: "string"
+    description: "目标进程名"
+    required: true
+  - name: "pattern"
+    type: "string"
+    description: "搜索模式（pymem 支持的格式，如 'XX XX ?? XX' 或字节序列）"
+    required: true
+  - name: "return_multiple"
+    type: "bool"
+    default: false
+    description: "是否返回所有匹配地址（false 仅返回首个）"
+    required: false
+
+prompt_template: |
+  任务：在进程 {{process_name}} 内存中扫描模式。
+  搜索模式：{{pattern}}
+  返回全部匹配：{{return_multiple}}
+
+  执行步骤：
+  1. 使用 memory.attach 附加进程 {{process_name}}，获取 pid。
+  2. 调用 memory.read 执行模式扫描，参数：
+     - pattern: {{pattern}}
+     - return_multiple: {{return_multiple}}
+  3. 若 return_multiple=true，列出所有匹配地址；否则返回首个地址。
+  4. 对每个匹配地址，调用 memory.read 读取上下文字节（前后各 32 字节）。
+  5. 输出扫描报告：匹配地址列表、上下文字节、可能的含义（如字符串/数值/指针）。
+
+  注意事项：
+  - 模式格式：'XX XX ?? XX' 中 XX 表示具体字节，?? 表示通配。
+  - 大进程扫描可能耗时较长（>10 秒），建议缩小模块范围。
+  - 附加进程需要管理员权限。
+
+execution_flow:
+  - action: "memory.attach"
+    args:
+      process_name: "{{process_name}}"
+  - action: "memory.read"
+    args:
+      pattern: "{{pattern}}"
+      return_multiple: "{{return_multiple}}"
