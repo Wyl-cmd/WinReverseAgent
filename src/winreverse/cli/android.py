@@ -141,10 +141,15 @@ def lime(
     local_module: str = typer.Option("lime.ko", "--module", help="本地编译好的 lime.ko 路径"),
 ) -> None:
     """生成 LiME 内存采集引导（GPL-2.0 隔离：只出命令清单，不分发不执行）。"""
+    from winreverse.forensics.android.adb import AdbError
     from winreverse.forensics.android.lime import build_lime_guide
 
     adb = _get_adb(adb_path=None)
-    kernel = adb.get_kernel_release(serial)
+    try:
+        kernel = adb.get_kernel_release(serial)
+    except AdbError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1) from e
     guide = build_lime_guide(serial, kernel_release=kernel, local_module_path=local_module)
 
     console.print(

@@ -409,8 +409,13 @@ class Agent:
 
         usage = result.usage
         if usage is not None:
-            self.total_usage["input"] += int(getattr(usage, "input", 0) or 0)
-            self.total_usage["output"] += int(getattr(usage, "output", 0) or 0)
+            # kosong Usage 的字段是 input_tokens/output_tokens；兼容带 .input/.output 的 TokenUsage
+            self.total_usage["input"] += int(
+                getattr(usage, "input", None) or getattr(usage, "input_tokens", 0) or 0
+            )
+            self.total_usage["output"] += int(
+                getattr(usage, "output", None) or getattr(usage, "output_tokens", 0) or 0
+            )
         self.total_usage["steps"] += 1
 
         if response.tool_calls:

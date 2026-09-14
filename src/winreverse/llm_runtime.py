@@ -30,8 +30,8 @@ from kosong.types import (
     Message,
     MessageRole,
     TextPart,
-    TokenUsage,
     Tool,
+    Usage,
 )
 from winreverse.config import LLMConfig
 
@@ -239,7 +239,11 @@ class LLMAdapter:
                 raise LLMError(
                     f"端点或模型不存在（404）：检查 base_url 与模型名（{actual_model}）"
                 ) from e
-            if "connect" in text.lower() or "connection" in text.lower() or "timed out" in text.lower():
+            if (
+                "connect" in text.lower()
+                or "connection" in text.lower()
+                or "timed out" in text.lower()
+            ):
                 base_note = self._config.base_url.strip() or "OpenAI 官方端点（国内直连通常不可达）"
                 raise LLMError(
                     "无法连接 LLM 端点: "
@@ -255,9 +259,11 @@ class LLMAdapter:
 
         usage = None
         if getattr(response, "usage", None):
-            usage = TokenUsage(
-                input_other=int(response.usage.prompt_tokens or 0),
-                output=int(response.usage.completion_tokens or 0),
+            # GenerateResult.usage 的契约类型是 Usage（非 TokenUsage），
+            # 传错类型会被 pydantic 校验拒绝，导致正常响应直接失败
+            usage = Usage(
+                input_tokens=int(response.usage.prompt_tokens or 0),
+                output_tokens=int(response.usage.completion_tokens or 0),
             )
 
         return GenerateResult(

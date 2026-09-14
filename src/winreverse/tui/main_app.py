@@ -588,7 +588,14 @@ class MainApp(App[None]):
         elapsed_str = f"{mins}m {secs}s" if mins > 0 else f"{secs}s"
 
         status = "*" if self._soul_ready else "o"
-        header_widget = self.query_one("#header-bar", Static)
+        # 1s 定时器回调可能落在 screen DOM 尚未挂载 / 正在拆除的窗口内
+        # （真机实测 2026-09-14：偶发 NoMatches: No nodes match '#header-bar'
+        #   on Screen(id='_default') → Textual 致命错误）。控件不存在时静默跳过，
+        # 等下一次 tick 再刷新，避免定时器把 app 打崩。
+        header_nodes = self.query("#header-bar")
+        if not header_nodes:
+            return
+        header_widget = header_nodes.first(Static)
         target_display = self.target or "(未指定)"
         objective_display = self.objective or "逆向分析"
         header_widget.update(
@@ -600,7 +607,12 @@ class MainApp(App[None]):
 
     def _update_context_bar(self) -> None:
         """轮询 Agent 上下文快照并刷新状态栏（token/窗口/压缩/用量）。"""
-        context_bar = self.query_one("#context-bar", ContextBar)
+        # 同 _update_header：控件缺失（DOM 重建/拆除窗口）时静默跳过，
+        # 否则 1s 定时器会抛 NoMatches 并把 app 打崩（真机实测 2026-09-14）。
+        bar_nodes = self.query("#context-bar")
+        if not bar_nodes:
+            return
+        context_bar = bar_nodes.first(ContextBar)
         agent = getattr(self._agent, "_soul", None)
         agent_instance = getattr(agent, "last_agent", None) if agent is not None else None
         if agent_instance is None:

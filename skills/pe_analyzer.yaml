@@ -26,7 +26,7 @@ prompt_template: |
   4. 使用 pe.exports 列出导出表（DLL 场景）。
   5. 使用 pe.sections 列出节区，检查异常节区名（如 .packed、UPX0）。
   6. 使用 die.scan_file 识别壳/编译器/语言，deep={{deep_scan}}。
-  7. 使用 disasm 反汇编入口点前 64 字节，初步判断代码特征。
+  7. 使用 （反汇编动作当前未注册）改用 pe.suspicious_imports 与 die.scan_file 的结果推断入口点代码特征。
   8. 输出综合分析报告：
      - 文件元信息（位数、imphash、入口点）
      - 导入表摘要（按 DLL 分组）

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import uuid
@@ -95,14 +96,23 @@ class Evidence:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Evidence:
-        """从字典构造（加载 case.json 用）。"""
+        """从字典构造（加载 case.json 用）。
+
+        Raises:
+            CaseError: 证据记录字段非法
+        """
+        try:
+            evidence_type = EvidenceType(data.get("type", EvidenceType.RAW_FILE.value))
+            size = int(data.get("size", 0))
+        except (TypeError, ValueError) as e:
+            raise CaseError(f"证据记录字段非法: {e}") from e
         return cls(
             evidence_id=str(data.get("evidence_id", "")),
-            type=EvidenceType(data.get("type", EvidenceType.RAW_FILE.value)),
+            type=evidence_type,
             path=str(data.get("path", "")),
             original_path=str(data.get("original_path", "")),
             sha256=str(data.get("sha256", "")),
-            size=int(data.get("size", 0)),
+            size=size,
             collected_at=str(data.get("collected_at", "")),
             collector=str(data.get("collector", "")),
             notes=str(data.get("notes", "")),
@@ -339,10 +349,15 @@ class CaseManager:
             evidence_dir = self.case_dir(case_id) / "evidence"
             evidence_dir.mkdir(parents=True, exist_ok=True)
             target = evidence_dir / f"{evidence_id}_{source.name}"
-            if source.is_dir():
-                shutil.copytree(source, target)
-            else:
-                shutil.copy2(source, target)
+            try:
+                if source.is_dir():
+                    shutil.copytree(source, target)
+                else:
+                    shutil.copy2(source, target)
+            except OSError as e:
+                # 复制中断时清除半成品，避免案件目录留下清单外的孤儿证据目录
+                shutil.rmtree(target, ignore_errors=True)
+                raise CaseError(f"证据复制失败: {e}") from e
             rel_path = str(target.relative_to(self.case_dir(case_id)))
             stored_path = target
 
@@ -397,7 +412,12 @@ class CaseManager:
             return Path(evidence.original_path)
         resolved = (self.case_dir(case_id) / evidence.path).resolve()
         case_root = self.case_dir(case_id).resolve()
-        if not str(resolved).startswith(str(case_root)):
+        try:
+            # commonpath 而非 startswith：防止兄弟目录前缀（<case_id>_x）绕过越界检查
+            within_case = Path(os.path.commonpath((resolved, case_root))) == case_root
+        except ValueError as e:
+            raise CaseError(f"证据路径越界: {evidence.path}") from e
+        if not within_case:
             raise CaseError(f"证据路径越界: {evidence.path}")
         return resolved
 

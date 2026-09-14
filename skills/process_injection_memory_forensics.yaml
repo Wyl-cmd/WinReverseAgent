@@ -1,0 +1,54 @@
+# 来源：方法论改编自 meltedinhex/analyst-ai-pack: detecting-process-injection-in-memory + recovering-injected-code-and-shellcode（Apache-2.0）
+# 适配：WinReverseAgent 内置动作（pe.* / memory.* / yara.* / die.* / net.* / fs.* / shell.run / behavior.*）
+# ATT&CK: T1055, T1620, T1027
+name: "进程注入内存取证"
+description: "在内存镜像中定位注入痕迹：无文件支撑的可执行私有区域、RWX 权限页、被改写的入口点，并 carve 出注入的 PE/Shellcode 供进一步分析。"
+target: "Windows 内存镜像 / 进程转储"
+
+parameters:
+  - name: "file_path"
+    type: "string"
+    description: "内存镜像/转储路径（CLI: -f）"
+    required: true
+  - name: "pid"
+    type: "int"
+    default: 0
+    description: "目标 PID（0 = 全镜像扫描）"
+    required: false
+
+prompt_template: |
+  任务：对 {{file_path}} 做进程注入取证（PID={{pid}}，0 表示全镜像）。
+
+  步骤：
+  1. memory.regions 枚举内存区域，重点标记：
+     - 私有（MEM_PRIVATE）+ 可执行，且**无文件支撑（no mapped file）**的区域 ← 注入的典型特征
+     - RWX 或 RX 且页大小为 0x1000 对齐的大块
+     - 与模块列表不对应的可执行区
+  2. memory.analyze 做整体分析（进程/模块/句柄/网络），列出候选进程与可疑模块。
+  3. memory.carve_pe 从可疑区域 carve PE 头（MZ/PE），得到被注入的映像。
+  4. yara.scan_memory 打一遍内存扫描（若有规则集），记录命中的规则与偏移。
+  5. 对 carve 出的 PE 走静态分诊（pe.meta/pe.sections/pe.imports）。
+
+  输出：
+  - 可疑区域表：地址范围 / 权限 / 类型 / 支撑文件 / 判据
+  - 候选被注入进程与理由（对照正常进程/模块基线）
+  - carve 产物清单：文件路径 + SHA-256 + 类型
+  - 注入技术判定（如 CreateRemoteThread / 反射加载 / 进程镂空），**并给出支持该判定的具体证据**
+  - ATT&CK 映射
+
+  注意事项：
+  - "私有+可执行"存在合法例外（JIT、.NET、部分反作弊）；必须与内存中的模块列表交叉验证后再定性。
+  - 本技能只读内存镜像，不触碰活体进程（除显式只读转储）。
+
+execution_flow:
+  - action: "memory.regions"
+    args:
+      file_path: "{{file_path}}"
+      pid: "{{pid}}"
+  - action: "memory.analyze"
+    args:
+      file_path: "{{file_path}}"
+  - action: "memory.carve_pe"
+    args:
+      file_path: "{{file_path}}"
+      pid: "{{pid}}"

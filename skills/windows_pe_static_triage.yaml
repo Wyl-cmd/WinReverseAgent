@@ -1,0 +1,60 @@
+# 来源：方法论改编自 meltedinhex/analyst-ai-pack: performing-static-pe-analysis + triaging-an-unknown-sample（Apache-2.0）
+# 适配：WinReverseAgent 内置动作（pe.* / memory.* / yara.* / die.* / net.* / fs.* / shell.run / behavior.*）
+# ATT&CK: T1027, T1140, T1129
+name: "Windows PE 静态分诊"
+description: "不执行样本，先摸清 PE 结构与可疑特征：元信息/节区/导入导出/可疑 API/壳与编译器/熵异常，给出是否深入与如何深入的判断。"
+target: "Windows PE 文件"
+
+parameters:
+  - name: "file_path"
+    type: "string"
+    description: "样本路径（.exe/.dll/.sys）"
+    required: true
+  - name: "deep_scan"
+    type: "bool"
+    default: false
+    description: "是否启用 DIE 深度扫描（更准但慢 10 倍以上）"
+    required: false
+
+prompt_template: |
+  任务：对 PE 文件做静态分诊（不执行）。
+  样本：{{file_path}}   深度扫描：{{deep_scan}}
+
+  请按此顺序做，并为每一步保留原始输出：
+  1. pe.meta 取基础元信息（位数、入口点、时间戳、imphash）。
+  2. pe.sections 列出节区，重点看：异常节名（UPX0/.packed/.themida）、原始大小 vs 虚拟大小严重不符、
+     可写可执行（WX）节、节区数量异常。
+  3. pe.imports 列导入表，pe.suspicious_imports 标可疑 API（进程注入/内存操作/反调试/加密/网络）。
+  4. pe.exports 看导出（DLL/服务场景）。
+  5. die.scan_file 识别壳、编译器、语言与打包器，deep={{deep_scan}}。
+  6. 字符串线索：见"样本字符串与配置提取"技能（本技能不做字符串深挖）。
+
+  输出必须包含：
+  - 样本身份：SHA-256 / 大小 / 位数 / 编译时间 / imphash
+  - 节区表与异常点（逐条给理由）
+  - 导入表摘要（按 DLL 分组）与可疑 API 清单（分高/中/低风险，附判据）
+  - 壳/编译器/语言识别结论
+  - **分诊结论**：像什么家族/类型，是否值得深入，下一步建议（静态还是必须动态）
+
+  注意事项（必须写进报告）：
+  - 可疑 API ≠ 恶意：安全软件/加壳器也常用 CreateRemoteThread 等，需结合上下文。
+  - 编译时间戳可被篡改，不能单独作为时间线证据。
+  - 本技能全程只读，不修改样本。
+
+execution_flow:
+  - action: "pe.meta"
+    args:
+      file_path: "{{file_path}}"
+  - action: "pe.sections"
+    args:
+      file_path: "{{file_path}}"
+  - action: "pe.imports"
+    args:
+      file_path: "{{file_path}}"
+  - action: "pe.suspicious_imports"
+    args:
+      file_path: "{{file_path}}"
+  - action: "die.scan_file"
+    args:
+      file_path: "{{file_path}}"
+      deep: "{{deep_scan}}"

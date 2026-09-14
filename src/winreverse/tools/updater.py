@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import shutil
 import tempfile
@@ -189,7 +190,7 @@ class ToolUpdater:
         """
         manifest = self._load_manifest()
         tools = manifest.get("tools", [])
-        entry = next((t for t in tools if t.get("name") == name), None)
+        entry = next((t for t in tools if isinstance(t, dict) and t.get("name") == name), None)
         if entry is None:
             raise KeyError(f"工具未在 manifest 中登记: {name}")
         if not isinstance(entry, dict):
@@ -447,14 +448,22 @@ class ToolUpdater:
                 f"[SHA256] {tool_name} 无预设 package_sha256，计算并回填: {actual_sha256[:16]}..."
             )
 
-        # 3. 备份旧版本到 .bak/
+        # 3. 备份旧版本到 .bak/（备份失败时尚未触碰 install_dir，安全中止）
         install_dir = self.project_root / install_path
         bak_dir = self.project_root / f"{install_path.rstrip('/')}.bak"
         if install_dir.exists():
-            if bak_dir.exists():
-                shutil.rmtree(bak_dir)
-            shutil.move(str(install_dir), str(bak_dir))
-            _logger.info(f"[BACKUP] 旧版本已备份到 {bak_dir}")
+            try:
+                if bak_dir.exists():
+                    shutil.rmtree(bak_dir)
+                shutil.move(str(install_dir), str(bak_dir))
+                _logger.info(f"[BACKUP] 旧版本已备份到 {bak_dir}")
+            except OSError as e:
+                zip_path.unlink(missing_ok=True)
+                return UpdateResult(
+                    name=tool_name,
+                    success=False,
+                    message=f"备份旧版本失败: {e}",
+                )
 
         # 4. 解压新版本到 install_path
         try:
@@ -463,7 +472,10 @@ class ToolUpdater:
                 zf.extractall(str(install_dir))
             _logger.info(f"[EXTRACT] 已解压到 {install_dir}")
         except (zipfile.BadZipFile, OSError) as e:
-            # 解压失败，回滚备份
+            # 解压失败，回滚备份（先移除新建的安装目录，
+            # 否则 shutil.move 会把备份嵌套进该目录而非替换它）
+            if install_dir.exists():
+                shutil.rmtree(install_dir)
             if bak_dir.exists():
                 shutil.move(str(bak_dir), str(install_dir))
             zip_path.unlink(missing_ok=True)
@@ -473,12 +485,22 @@ class ToolUpdater:
                 message=f"解压失败: {e}",
             )
 
-        # 5. 回填 manifest：package_sha256 = 下载包哈希，sha256 = entry exe 哈希
-        self._update_manifest_field(tool_name, "version", latest_version)
-        self._update_manifest_field(tool_name, "package_sha256", actual_sha256)
-        entry_sha = self._compute_entry_sha256(tool_name)
-        self._update_manifest_field(tool_name, "sha256", entry_sha)
-        self._save_manifest()
+        # 5. 回填 manifest：package_sha256 = 下载包哈希，sha256 = entry exe 哈希。
+        #    新版本已解压就位，回填失败不回滚安装，但须按契约返回 UpdateResult
+        #    而非裸异常，并清理临时 zip
+        try:
+            self._update_manifest_field(tool_name, "version", latest_version)
+            self._update_manifest_field(tool_name, "package_sha256", actual_sha256)
+            entry_sha = self._compute_entry_sha256(tool_name)
+            self._update_manifest_field(tool_name, "sha256", entry_sha)
+            self._save_manifest()
+        except (OSError, yaml.YAMLError) as e:
+            zip_path.unlink(missing_ok=True)
+            return UpdateResult(
+                name=tool_name,
+                success=False,
+                message=f"清单回填失败（新版本文件已解压到 {install_dir}）: {e}",
+            )
 
         # 清理临时文件
         zip_path.unlink(missing_ok=True)
@@ -627,7 +649,8 @@ class ToolUpdater:
 
                 _logger.info(f"[DOWNLOAD] {tool_name} 下载完成: {zip_path}")
                 return zip_path
-            except (HTTPError, URLError, OSError) as e:
+            except (HTTPError, URLError, OSError, http.client.HTTPException) as e:
+                # IncompleteRead 等 HTTP 协议级错误（截断下载）正是重试的目标场景
                 _logger.warning(f"[DOWNLOAD] {tool_name} 第 {attempt} 次失败: {e}")
                 if attempt < retry_times:
                     continue

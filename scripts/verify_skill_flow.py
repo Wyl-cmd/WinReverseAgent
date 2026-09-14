@@ -5,6 +5,7 @@
 
 测试目标：C:\\Windows\\System32\\notepad.exe
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -30,7 +31,7 @@ async def test_skill_flow() -> int:
     print("=" * 70)
     print("WinReverseAgent Skill 预置流端到端验证")
     print("=" * 70)
-    print(f"测试 Skill: PE 文件分析")
+    print("测试 Skill: PE 文件分析")
     print(f"测试目标: {TARGET_PE}")
     print()
 
@@ -40,7 +41,7 @@ async def test_skill_flow() -> int:
     agent._ensure_initialized()
 
     skill_registry = agent._skill_registry
-    print(f"[OK] Agent 初始化完成")
+    print("[OK] Agent 初始化完成")
     print(f"  - 已注册工具: {len(agent._registry)} 个")
     print(f"  - 已加载 Skill: {len(skill_registry)} 个")
     for skill_info in skill_registry.list_skills():
@@ -67,7 +68,7 @@ async def test_skill_flow() -> int:
         "deep_scan": False,
     }
     rendered_prompt = skill.render_prompt(render_vars)
-    print(f"[OK] prompt_template 渲染成功（前 200 字符）:")
+    print("[OK] prompt_template 渲染成功（前 200 字符）:")
     print(f"  {rendered_prompt[:200]}...")
     print()
 

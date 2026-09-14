@@ -8,6 +8,7 @@
 
 使用 C:\\Windows\\System32\\notepad.exe 作为测试目标。
 """
+
 from __future__ import annotations
 
 import sys
@@ -72,8 +73,14 @@ def main() -> int:
 
     # PE 工具（6 个）
     print("—— PE 工具测试（基于 pefile 库）——")
-    for tool_name in ["pe.parse", "pe.imports", "pe.exports", "pe.sections",
-                       "pe.suspicious_imports", "pe.meta"]:
+    for tool_name in [
+        "pe.parse",
+        "pe.imports",
+        "pe.exports",
+        "pe.sections",
+        "pe.suspicious_imports",
+        "pe.meta",
+    ]:
         try:
             result = registry.call(tool_name, {"file_path": TARGET_PE})
             status = result.get("status", "unknown")
@@ -114,7 +121,7 @@ def main() -> int:
 
     # YARA 工具（2 个，基于 yara-python 库）
     print("—— YARA 工具测试（基于 yara-python 库）——")
-    yara_rule = '''
+    yara_rule = """
 rule test_notepad {
     strings:
         $mz = "MZ"
@@ -122,12 +129,15 @@ rule test_notepad {
     condition:
         $mz at 0 and $pe
 }
-'''
+"""
     try:
-        result = registry.call("yara.scan_file", {
-            "file_path": TARGET_PE,
-            "rule_text": yara_rule,
-        })
+        result = registry.call(
+            "yara.scan_file",
+            {
+                "file_path": TARGET_PE,
+                "rule_text": yara_rule,
+            },
+        )
         status = result.get("status", "unknown")
         if status == "success":
             preview = _format_output(result)
@@ -144,10 +154,13 @@ rule test_notepad {
     try:
         with open(TARGET_PE, "rb") as f:
             pe_data = f.read(1024)  # 只读取前 1KB 用于测试
-        result = registry.call("yara.scan_memory", {
-            "data": pe_data,
-            "rule_text": yara_rule,
-        })
+        result = registry.call(
+            "yara.scan_memory",
+            {
+                "data": pe_data,
+                "rule_text": yara_rule,
+            },
+        )
         status = result.get("status", "unknown")
         if status == "success":
             preview = _format_output(result)

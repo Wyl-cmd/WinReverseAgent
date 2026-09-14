@@ -63,6 +63,15 @@ class MemoryRegionsTool(BaseTool):
         handle = int(pm.process_handle)
         regions = memdump_api.enumerate_regions(handle, only_committed=True)
         committed = [r for r in regions if r.is_committed]
+        if not committed:
+            # fail-closed（与 memory.dump 的 2026-09-12 修复同口径）：句柄无效 / 目标已退出 /
+            # 无权限时 enumerate_regions 会静默返回空列表，旧行为把它当"无可疑区域"上报，
+            # 取证链上即产生**假阴性**证据。真机实测 2026-09-14：
+            # attach 后目标进程退出 → 旧行为 status=success / total=0。
+            raise memdump_api.MemoryAccessError(
+                f"未枚举到任何已提交内存区域（pid={pid}）：目标句柄可能无效、"
+                "进程已退出或无权限"
+            )
         suspicious = [r for r in committed if r.is_suspicious]
 
         shown = committed if include_all else [r for r in committed if r.is_executable]

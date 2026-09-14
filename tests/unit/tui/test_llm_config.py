@@ -60,6 +60,24 @@ async def test_apply_to_config() -> None:
         assert new_config.llm.temperature == 0.5
 
 
+async def test_safe_readers_fallback_to_default() -> None:
+    """widget 缺失或值非法时，安全读取器应回退到默认值而非抛异常。"""
+    app = SettingsApp(config=AppConfig())
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        pane = app.query_one(LLMConfigPane)
+        # widget id 不存在：_get_input_value / _get_select_value 回退默认
+        assert pane._get_input_value("no-such-widget", "fallback") == "fallback"
+        assert pane._get_select_value("no-such-widget", "openai") == "openai"
+        # 非法数字输入：int / float 解析失败回退默认
+        pane.query_one("#max-tokens", Input).value = "abc"
+        pane.query_one("#temperature", Input).value = "not-a-float"
+        new_config = AppConfig()
+        pane.apply_to_config(new_config)
+        assert new_config.llm.max_tokens == 8192
+        assert new_config.llm.temperature == 0.7
+
+
 async def test_apply_to_config_preserves_defaults() -> None:
     """未修改界面值时，apply_to_config 应保留默认配置值。"""
     app = SettingsApp(config=AppConfig())

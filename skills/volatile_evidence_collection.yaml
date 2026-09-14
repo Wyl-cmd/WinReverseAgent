@@ -1,0 +1,56 @@
+# 来源：方法论改编自 meltedinhex/analyst-ai-pack: collecting-volatile-evidence-from-a-suspect-host（Apache-2.0）
+# 适配：WinReverseAgent 内置动作（pe.* / memory.* / yara.* / die.* / net.* / fs.* / shell.run / behavior.*）
+# ATT&CK: T1057, T1049, T1003
+name: "易失证据采集（按易失性顺序）"
+description: "对疑似失陷主机按易失性从高到低采集证据：内存→网络连接→进程/登录用户→已打开句柄，全程留痕并计算哈希，保证证据可用。"
+target: "疑似失陷的 Windows 主机"
+
+parameters:
+  - name: "output_dir"
+    type: "string"
+    description: "证据输出目录"
+    required: true
+  - name: "include_memory"
+    type: "bool"
+    default: true
+    description: "是否采集完整内存镜像（体积大、耗时）"
+    required: false
+
+prompt_template: |
+  任务：对当前主机做**易失证据采集**，输出到 {{output_dir}}，顺序必须是「越易失越先」。
+
+  采集清单与对应动作（每一步都要记录：动作、时间、命令原文、输出文件、SHA-256）：
+  1. **内存**（最易失）：memory.dump 完整转储（include_memory={{include_memory}}）；
+     若不能全量，至少 memory.regions + 关键进程 memory.dump_minidump。
+  2. **网络状态**：net.interfaces 记录接口与地址；shell.run 执行
+     `netstat -ano`（含 PID）与 `ipconfig /all`（DNS 缓存另存 `ipconfig /displaydns`）。
+  3. **进程与模块**：shell.run `tasklist /v`（含用户/会话）、`wmic process get ProcessId,ParentProcessId,CommandLine`、
+     已建立连接的进程映射。
+  4. **登录与账户**：shell.run `query user`、`net user`、`net localgroup administrators`。
+  5. **持久化清点（只读）**：注册表 Run/RunOnce、启动目录、计划任务、服务（`schtasks /query /v`、`sc query`）。
+  6. **取证留痕**：写一份 `collection-log.txt`，逐条列出上面的命令原文与输出文件哈希；
+     对关键证据文件算 SHA-256 并附加时间戳。
+
+  输出报告：
+  - 采集时间线（步骤 → 时间 → 产物 → 哈希）
+  - **证据完整性声明**：哪些是原始证据、哪些是衍生分析产物
+  - 立即可见的可疑点（异常外联、可疑进程路径、非预期计划任务）
+  - 未能采集项及原因（如权限不足、目标文件被占用）
+
+  注意事项：
+  - **只读采集**：不得结束进程、改配置、清日志。
+  - 内存镜像体积可达数 GB，先确认目标盘空间。
+  - 命令输出务必原样留存，不要人工"整理"后再存。
+
+execution_flow:
+  - action: "memory.dump"
+    args:
+      output_dir: "{{output_dir}}"
+  - action: "net.interfaces"
+    args: {}
+  - action: "shell.run"
+    args:
+      command: "netstat -ano"
+  - action: "shell.run"
+    args:
+      command: "tasklist /v"

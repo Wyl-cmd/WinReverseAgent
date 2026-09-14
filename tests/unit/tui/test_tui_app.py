@@ -73,6 +73,25 @@ async def test_app_action_save() -> None:
             mock_notify.assert_called_once()
 
 
+async def test_app_action_save_failure() -> None:
+    """action_save 在 save_config 抛异常时应触发错误 notify 而非崩溃。"""
+    app = SettingsApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        with (
+            patch(
+                "winreverse.tui.app.save_config",
+                side_effect=OSError("disk full"),
+            ),
+            patch.object(app, "notify") as mock_notify,
+        ):
+            app.action_save()
+        mock_notify.assert_called_once()
+        assert "保存失败" in mock_notify.call_args.args[0]
+        assert mock_notify.call_args.kwargs["title"] == "错误"
+        assert mock_notify.call_args.kwargs["severity"] == "error"
+
+
 async def test_app_has_status_bar() -> None:
     """compose 应创建底部状态栏。"""
     app = SettingsApp()

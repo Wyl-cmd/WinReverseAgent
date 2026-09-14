@@ -42,7 +42,7 @@ execution_flow:
   - action: "memory.attach"
     args:
       process_name: "{{process_name}}"
-  - action: "tshark.call"
+  - action: "net.read_pcap"
     args:
       duration: "{{duration}}"
       port: "{{port}}"

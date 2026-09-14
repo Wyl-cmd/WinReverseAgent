@@ -20,6 +20,7 @@ import ctypes
 import sys
 from dataclasses import dataclass, field
 
+import yaml
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -116,7 +117,7 @@ def _check_platform() -> CheckResult:
     if sys.platform == "win32":
         return CheckResult(name="运行平台", status="ok", message="Windows")
     # 非 Windows 平台分支（mypy 在 Windows 上会判定为 unreachable，但保留跨平台兼容）
-    return CheckResult(  # type: ignore[unreachable]
+    return CheckResult(
         name="运行平台",
         status="warn",
         message=f"当前平台 {sys.platform}，本项目仅支持 Windows",
@@ -149,7 +150,7 @@ def _check_wheels() -> CheckResult:
             check_importable=False,
         )
         report = checker.check_all()
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, yaml.YAMLError) as e:
         return CheckResult(
             name="Python wheel 完整性",
             status="error",
@@ -159,6 +160,13 @@ def _check_wheels() -> CheckResult:
 
     total = len(report.results)
     ok_count = sum(1 for r in report.results if r.status == "ok")
+    if total == 0:
+        return CheckResult(
+            name="Python wheel 完整性",
+            status="error",
+            message="清单为空（0 个 wheel 条目）",
+            detail=f"目录: {wheels_dir}",
+        )
     missing = report.missing_wheels
     mismatched = report.mismatched_wheels
 
@@ -214,7 +222,7 @@ def _check_tools() -> CheckResult:
             project_root=project_root,
         )
         report = checker.check_all()
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, yaml.YAMLError) as e:
         return CheckResult(
             name="外部工具完整性",
             status="error",
@@ -224,6 +232,13 @@ def _check_tools() -> CheckResult:
 
     total = len(report.results)
     ok_count = sum(1 for r in report.results if r.status == "ok")
+    if total == 0:
+        return CheckResult(
+            name="外部工具完整性",
+            status="error",
+            message="清单为空（0 个工具条目）",
+            detail=f"清单: {manifest_path.relative_to(project_root)}",
+        )
     missing = report.missing_tools
     mismatched = report.mismatched_tools
     empty_sha = report.empty_sha256_tools
@@ -297,7 +312,7 @@ def _check_tool_updates() -> CheckResult:
             project_root=project_root,
         )
         updates = updater.check_updates()
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, yaml.YAMLError) as e:
         return CheckResult(
             name="工具更新检查",
             status="warn",

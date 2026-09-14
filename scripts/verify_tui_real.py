@@ -9,6 +9,7 @@
 
 使用 Textual 的 run_test() 异步测试模式，不真正进入交互循环。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -28,7 +29,7 @@ async def test_main_app() -> bool:
     """
     print("—— MainApp 主操作台测试 ——")
     try:
-        from winreverse.tui.main_app import MainApp, SettingsScreen
+        from winreverse.tui.main_app import MainApp
 
         app = MainApp()
         print("  [OK] MainApp 实例化成功")
@@ -105,7 +106,6 @@ async def test_main_app() -> bool:
                 app._cmd_settings()
                 await pilot.pause()
                 # 验证 SettingsScreen 被推送
-                from textual.screen import Screen
 
                 current = app.screen
                 screen_name = type(current).__name__
@@ -139,6 +139,7 @@ async def test_settings_app() -> bool:
     print("—— SettingsApp 设置页面测试 ——")
     try:
         from textual.widgets import TabbedContent
+
         from winreverse.tui.app import SettingsApp
         from winreverse.tui.screens.llm_config import LLMConfigPane
         from winreverse.tui.screens.skill_list import SkillListPane
@@ -151,9 +152,9 @@ async def test_settings_app() -> bool:
             await pilot.pause()
             print("  [OK] SettingsApp 启动成功")
 
-            # 验证 TabbedContent 存在
+            # 验证 TabbedContent 存在（query_one 找不到时抛异常，由 except 捕获）
             try:
-                tabs = app.query_one(TabbedContent)
+                app.query_one(TabbedContent)
                 print("  [OK] TabbedContent 存在")
             except Exception:
                 print("  [FAIL] TabbedContent 缺失")

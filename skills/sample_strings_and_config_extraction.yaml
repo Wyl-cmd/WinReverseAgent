@@ -1,0 +1,48 @@
+# 来源：方法论改编自 meltedinhex/analyst-ai-pack: extracting-and-classifying-strings + extracting-config-from-a-running-sample（Apache-2.0）
+# 适配：WinReverseAgent 内置动作（pe.* / memory.* / yara.* / die.* / net.* / fs.* / shell.run / behavior.*）
+# ATT&CK: T1027, T1140, T1071
+name: "样本字符串与配置提取"
+description: "从样本或内存转储中提取并分类字符串，定位 C2 地址/端口/密钥/互斥体/路径，还原远控配置（含常见混淆的初步解码）。"
+target: "恶意样本 / 进程内存转储"
+
+parameters:
+  - name: "file_path"
+    type: "string"
+    description: "含字符串的镜像/转储文件路径（CLI: -f）"
+    required: true
+  - name: "min_len"
+    type: "int"
+    default: 6
+    description: "字符串最小长度"
+    required: false
+
+prompt_template: |
+  任务：从 {{file_path}} 提取字符串并还原可能的远控/载荷配置。
+  最小长度：{{min_len}}
+
+  步骤：
+  1. memory.strings 提取字符串（ASCII 与 UTF-16 都要），按类别归档：
+     URL/域名/IP:端口、文件路径、注册表键、互斥体名、命令与参数、User-Agent、Base64/Hex 大块、密钥样长串。
+  2. memory.iocs 提取结构化 IOC，与上一步结果**交叉比对**（去重、去掉明显噪声如系统 DLL 名）。
+  3. 对可疑长串做初步解码判断（Base64/Hex/XOR 单字节），**只报告解码依据与结果**，不做多轮爆破。
+  4. 若存在疑似配置文件块（JSON/INI/结构体特征），描述其字段与用途（C2 host/port、心跳间隔、标识 ID）。
+
+  输出：
+  - 分类字符串清单（每类给 5-10 条代表 + 总数）
+  - **C2 线索**（域名/IP/端口/URL 路径/UA），标注是「明文可见」还是「疑似加密」
+  - 密钥/互斥体/标识等可用于溯源与检测的常量
+  - 每个 IOC 的提取位置（动作 + 偏移/上下文片段）
+
+  注意事项：
+  - UTF-16 字符串常被忽略，务必两种都取。
+  - 疑似加密串不要宣称已解密；写明「未破解」。
+  - 提取到的真实 C2 域名/IP **不要主动访问**。
+
+execution_flow:
+  - action: "memory.strings"
+    args:
+      file_path: "{{file_path}}"
+      min_len: "{{min_len}}"
+  - action: "memory.iocs"
+    args:
+      file_path: "{{file_path}}"

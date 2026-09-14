@@ -90,6 +90,8 @@ def load_agent_spec(path: Path) -> AgentTypeDefinition:
 
     # 兼容两种 YAML 结构：顶层为 agent 定义，或 {agent: {...}} 包裹
     agent_data = data.get("agent", data)
+    if not isinstance(agent_data, dict):
+        raise AgentSpecError("'agent' 字段应为映射（或顶层直接为 agent 定义）")
 
     name = agent_data.get("name")
     if not name:
@@ -104,7 +106,11 @@ def load_agent_spec(path: Path) -> AgentTypeDefinition:
     if system_prompt_path is not None:
         prompt_file = path.parent / system_prompt_path
         if prompt_file.exists():
-            system_prompt_template = prompt_file.read_text(encoding="utf-8")
+            try:
+                system_prompt_template = prompt_file.read_text(encoding="utf-8")
+            except (OSError, ValueError) as e:
+                # 统一收敛为 AgentSpecError，保证 load_directory 能按文件粒度跳过坏文件
+                raise AgentSpecError(f"无法读取系统提示文件 {prompt_file}: {e}") from e
         else:
             logger.warning("System prompt file not found: %s", prompt_file)
     elif system_prompt_inline is not None:

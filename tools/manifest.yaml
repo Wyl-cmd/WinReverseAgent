@@ -1,0 +1,73 @@
+# WinReverseAgent 外部命令行工具清单
+#
+# 唯一数据源：doctor.py（外部工具完整性/更新检查）、`winreverse tools list`、
+# `winreverse tools update`、TUI 工具中心均读本文件。
+#
+# 字段说明：
+#   name           工具名（tools update <name> 用）
+#   version        当前登记版本
+#   latest_known   最新已知版本（纯本地比对，不联网；version == latest_known 即"均为最新"）
+#   install_path   相对项目根的安装目录（末尾带 / 亦可）
+#   entry          相对 install_path 的入口可执行文件名
+#   sha256         入口文件 SHA256（空 = 仅校验存在性，doctor 出 warn 不阻塞）
+#   required       true = 必选（缺失/不匹配 → doctor error）；false = 可选（→ warn）
+#   homepage       官网/仓库（供人工核对，非自动下载源）
+#
+# 注：download_url 待补（当前 `tools update` 会提示"无 download_url"，属预期行为；
+#     待确认官方直链后回填，勿填未经核实的地址）。
+schema_version: "1.0"
+
+tools:
+  - name: tshark
+    version: "4.6.7"
+    latest_known: "4.6.7"
+    install_path: "tools/tshark/"
+    entry: "tshark.exe"
+    sha256: ""
+    required: true
+    homepage: "https://www.wireshark.org"
+
+  - name: yara
+    version: "4.5.6"
+    latest_known: "4.5.6"
+    install_path: "tools/yara/"
+    entry: "yara64.exe"
+    sha256: ""
+    required: true
+    homepage: "https://github.com/VirusTotal/yara"
+
+  - name: die
+    version: "3.21"
+    latest_known: "3.21"
+    install_path: "tools/die/"
+    entry: "diec.exe"
+    sha256: ""
+    required: true
+    homepage: "https://github.com/horsicq/Detect-It-Easy"
+
+  - name: radare2
+    version: "6.1.8"
+    latest_known: "6.1.8"
+    install_path: "tools/radare2/"
+    entry: "r2.exe"
+    sha256: ""
+    required: false
+    homepage: "https://github.com/radareorg/radare2"
+
+  - name: ghidra
+    version: "12.1.2"
+    latest_known: "12.1.2"
+    install_path: "tools/ghidra/"
+    entry: "ghidraRun.bat"
+    sha256: ""
+    required: false
+    homepage: "https://github.com/NationalSecurityAgency/ghidra"
+
+  - name: adb
+    version: "latest"
+    latest_known: "latest"
+    install_path: "tools/adb/"
+    entry: "platform-tools/adb.exe"
+    sha256: ""
+    required: false
+    homepage: "https://developer.android.com/tools/releases/platform-tools"

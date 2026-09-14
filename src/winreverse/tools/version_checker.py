@@ -209,7 +209,8 @@ class WheelChecker:
             raise KeyError(f"wheel 未在 manifest 中登记: {name}")
 
         wheel_file = entry["wheel_file"]
-        expected_sha = entry["sha256"]
+        # sha256 未填（YAML null → None）是预期编写状态：归一为空串走 sha256_empty 分支
+        expected_sha = str(entry.get("sha256") or "")
         version = entry["version"]
         required = entry.get("required", True)
         import_name = entry.get("import_name", name)
@@ -229,7 +230,20 @@ class WheelChecker:
                 required=required,
             )
 
-        # 2. SHA256 校验
+        # 2. SHA256 校验（manifest 未填哈希时仅报 sha256_empty，对齐 ToolChecker 口径）
+        if not expected_sha:
+            _, actual_sha = self.verify_sha256(wheel_path, "")
+            return WheelCheckResult(
+                name=name,
+                version=version,
+                wheel_file=wheel_file,
+                status="sha256_empty",
+                message=f"manifest 中 sha256 未填写，仅校验存在性通过: {wheel_path}",
+                expected_sha256=expected_sha,
+                actual_sha256=actual_sha,
+                required=required,
+            )
+
         matched, actual_sha = self.verify_sha256(wheel_path, expected_sha)
         if not matched:
             return WheelCheckResult(

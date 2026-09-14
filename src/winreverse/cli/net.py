@@ -127,15 +127,21 @@ def edit(
     tshark_path: str = typer.Option(None, "--tshark", help="tshark 路径"),
 ) -> None:
     """pcap 文件级编辑（editcap：取前 N 包/去重，如提取 C2 流量样本段）。"""
-    bridge = _bridge(tshark_path)
-    from winreverse.forensics.network import NetworkToolError
+    # 修复(2026-09-12)：原实现先 `_bridge(tshark_path)` 构造 TsharkBridge，
+    # 而本命令只用 editcap（editcap.exe 与 tshark 同属 Wireshark，但不必需 tshark），
+    # 导致"有 editcap 无 tshark"的环境（含测试环境）在进入 editcap 分支前就抛
+    # NetworkToolError、异常落在 try 之外直接冒泡 → 退出码 1 且报 tshark 缺失。
+    # 现改为直接委托 EditcapBridge，错误统一由 NetworkToolError 出口处理。
+    from winreverse.forensics.network import EditcapBridge, NetworkToolError
+
+    editcap_override: Path | None = None
+    if tshark_path:  # --tshark 兼容保留：给的是 tshark.exe 时按同目录找 editcap.exe
+        candidate = Path(tshark_path).with_name("editcap.exe")
+        if candidate.is_file():
+            editcap_override = candidate
 
     try:
-        editcap = bridge  # 占位以满足类型
-        _ = editcap
-        from winreverse.forensics.network import EditcapBridge
-
-        editor = EditcapBridge()
+        editor = EditcapBridge(editcap_override)
         result_path = editor.edit_pcap(
             input_pcap,
             output_pcap,

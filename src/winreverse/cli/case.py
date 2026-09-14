@@ -69,8 +69,15 @@ def create(
 @case_app.command("list")
 def list_cases() -> None:
     """列出全部案件。"""
+    from winreverse.forensics.case import CaseError
+
     manager = _get_manager()
-    cases = manager.list_cases()
+    try:
+        cases = manager.list_cases()
+    except CaseError as e:
+        # 单份损坏清单不得以 traceback 击穿整个列表命令
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1) from e
     if not cases:
         console.print("[yellow]暂无案件（winreverse case create <名称>）[/yellow]")
         return

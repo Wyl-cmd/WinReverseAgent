@@ -434,16 +434,34 @@ class TestToolUpdaterRealImplementation:
         assert result.success is False
         assert "nonexistent_tool" in result.message
 
-    def test_update_all_returns_report(self, manifest_file: Path, project_root: Path) -> None:
-        """update_all 应返回 UpdateAllReport（无更新时 results 为空）。"""
+    def test_update_all_returns_report(
+        self, manifest_file: Path, project_root: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """update_all 应返回 UpdateAllReport，且只对"有新版本"的工具发起更新。
+
+        修复(2026-09-12)：本 fixture 中 yara 的 version(4.5.4) != latest_known(4.5.6)，
+        原用例会真的走到 `update()` → 从 https://example.com/yara.zip **真联网下载**，
+        在真机上表现为"偶发长时间阻塞"（流水线『无 --cov 复跑 ~85% 卡住』的元凶，
+        实测卡在该用例上 >120s 不返回）。现对 update 打桩：只断言遍历范围与报告结构，
+        单测**永不触网**。
+        """
         updater = ToolUpdater(
             manifest_path=manifest_file,
             project_root=project_root,
         )
+        called: list[str] = []
+
+        def _fake_update(name: str, *args: object, **kwargs: object) -> UpdateResult:
+            called.append(name)
+            return UpdateResult(name=name, success=True, message="stub: 单测不联网")
+
+        monkeypatch.setattr(updater, "update", _fake_update)
+
         report = updater.update_all()
         assert isinstance(report, UpdateAllReport)
-        # manifest 中 version == latest_known 时无更新
-        assert isinstance(report.results, list)
+        assert called == ["yara"]  # manifest 中仅 yara 有可用更新
+        assert len(report.results) == 1
+        assert report.results[0].name == "yara"
 
     def test_rollback_no_backup(self, manifest_file: Path, project_root: Path) -> None:
         """rollback 无备份目录时应返回失败。"""

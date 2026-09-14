@@ -728,7 +728,8 @@ class Compactor:
         """SIMPLE：保留最近 1/3，其余丢弃。"""
         split = self._keep_split(non_system)
         if split is None:
-            return non_system
+            # 无需压缩时必须原样返回全部消息（含 system），不得丢弃系统提示
+            return [*system_messages, *non_system]
         _old, recent_indices, _split_point = split
         kept = [non_system[i] for i in sorted(recent_indices)]
         return system_messages + kept
@@ -739,7 +740,8 @@ class Compactor:
         """SELECTIVE：旧区工具结果首尾截断保留，普通旧消息丢弃。"""
         split = self._keep_split(non_system)
         if split is None:
-            return non_system
+            # 无需压缩时必须原样返回全部消息（含 system），不得丢弃系统提示
+            return [*system_messages, *non_system]
         _old_indices, recent_indices, _split_point = split
         result_messages: list[Message] = list(system_messages)
         for i, msg in enumerate(non_system):
@@ -809,6 +811,11 @@ class Compactor:
                 else _SUMMARY_MSG_LIMIT
             )
             summary_parts.append(f"[{role_str}]: {text[:limit]}")
+
+        if not summary_parts:
+            # 旧区被配对保护掏空（或全部为空内容）：无可摘要内容，注入空摘要
+            # 反而使结果多于输入（removed_messages 为负），按无需压缩原样返回
+            return messages
 
         new_summary = "\n".join(summary_parts)
         if len(new_summary) > _MAX_SUMMARY_CHARS:

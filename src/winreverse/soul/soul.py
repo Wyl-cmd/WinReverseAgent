@@ -28,7 +28,7 @@ from typing import Any
 from kosong.types import Message
 from winreverse.engine.bus import ToolRegistry
 from winreverse.soul.agent import Agent, AgentConfig, AgentState, Runtime
-from winreverse.soul.agent_spec import AgentTypeDefinition, LaborMarket
+from winreverse.soul.agent_spec import AgentTypeDefinition, LaborMarket, ToolStrategy
 from winreverse.soul.compaction import CompactionStrategy, Compactor, RuntimeLLMProvider
 from winreverse.soul.context import ContextManager
 from winreverse.soul.toolset import SoulToolsetAdapter, ToolEventCallback
@@ -246,8 +246,12 @@ class WinReverseSoul:
         )
 
         # 如果指定了工具白名单，重新创建 toolset 适配器
+        # ALLOWLIST 语义为 fail-closed：即使白名单为空也必须过滤（0 个工具可暴露），
+        # 不得退回无过滤的共享 Runtime
         runtime = self._runtime
-        if effective_tools:
+        if effective_tools or (
+            type_def is not None and type_def.tool_strategy == ToolStrategy.ALLOWLIST
+        ):
             filtered_toolset = SoulToolsetAdapter(
                 self._registry,
                 allowed_tools=effective_tools,

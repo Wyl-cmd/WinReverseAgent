@@ -71,7 +71,12 @@ _IOC_PATTERNS: dict[str, re.Pattern[str]] = {
         r"(?i)\b[A-Za-z]:\\[^\s\"'<>|*?\x5c\x5c]{1,120}"
         r"|\b\\\\[A-Za-z0-9_.-]+\\[^\s\"'<>|*?]{1,120}"
     ),
-    "registry": re.compile(r"(?i)\b(?:HKEY_[A-Z_]+|HKLM|HKCU|HKCR|HKU)\b(?:\\[^\s\"']{1,120})?"),
+    # 注册表键：短别名（HKLM/HKCU/HKCR/HKU）必须带子键路径（\\子键），
+    # 否则纯随机字符串里的 \"hKU\" 之类 3 字母噪声会被误判为注册表 IOC。
+    # HKEY_* 全名较长、误报概率极低，保留可选路径。
+    "registry": re.compile(
+        r"(?i)\bHKEY_[A-Z_]+(?:\\[^\s\"']{1,120})?" r"|\b(?:HKLM|HKCU|HKCR|HKU)\\[^\s\"']{1,120}"
+    ),
     "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),
     "domain": re.compile(
         r"(?i)\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"

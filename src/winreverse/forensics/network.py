@@ -152,7 +152,10 @@ class TsharkBridge:
 
     def version(self) -> str:
         """tshark 版本号（首行）。"""
-        return self._run(["-v"]).splitlines()[0].strip()
+        lines = self._run(["-v"]).splitlines()
+        if not lines or not lines[0].strip():
+            raise NetworkToolError("tshark -v 无输出")
+        return lines[0].strip()
 
     def list_interfaces(self) -> list[NetworkInterface]:
         """列出可抓包的网络接口（tshark -D）。"""

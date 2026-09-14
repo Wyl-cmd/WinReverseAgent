@@ -415,10 +415,16 @@ async def test_action_update_all_with_manifest(tmp_path: Path) -> None:
     async with app.run_test() as pilot:
         await pilot.pause()
         pane = app.query_one(ToolCenterPane)
-        with patch.object(app, "notify"):
+        with (
+            patch.object(app, "notify"),
+            # 打桩「下载」边界：原用例会让 update_all() 真去 GET https://example.com/tshark.zip。
+            # 真机（无外网/走代理）下 urlopen 超时默认 600s 且重试 3 次 → 挂起整个测试轮（实测 >10min）。
+            # 单测不触网：桩掉下载 → update() 走「下载失败」分支，仍保留真实 update_all 循环与状态栏语义。
+            patch("winreverse.tools.updater.ToolUpdater._download_with_retry", return_value=None),
+        ):
             pane.action_update_all()
         status = pane.query_one("#status-bar", Static)
-        # 工具会尝试下载，可能失败，但应显示"更新完成"
+        # 工具会尝试下载（已打桩为失败），仍应显示"更新完成"
         assert "更新完成" in str(status.content) or "更新失败" in str(status.content)
 
 

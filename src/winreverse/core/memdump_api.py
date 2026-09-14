@@ -636,6 +636,16 @@ def dump_process(
         "suspicious_count": suspicious_count,
         "truncated_count": truncated_count,
     }
+    if dumped == 0:
+        # 修复(2026-09-12)：fail-closed。句柄无效 / 进程已退出 / 无权限时，区域枚举可能
+        # 得到 0 条或全部读取失败；旧行为会写出空 manifest 并当作"成功"返回，上层
+        # `case collect` 随即登记一条 0 字节证据并报成功——取证链上出现"成功但空"的假证据。
+        # 现直接报错，由调用方映射为退出码 1。
+        raise MemoryAccessError(
+            f"未转储到任何内存区域（区域总数 {len(all_regions)}，候选 {len(selected)}，跳过 {skipped}）："
+            "目标句柄可能无效、进程已退出或无权限"
+        )
+
     _write_manifest(out, entries, summary)
 
     return DumpResult(
@@ -726,7 +736,20 @@ def dump_minidump(
         )
         if not ok:
             err = ctypes.GetLastError()
-            raise MemoryAccessError(f"MiniDumpWriteDump 失败 (WinError {err})")
+            # GetLastError 在部分路径返回 HRESULT 形态（如 0x8007012B），低 16 位才是
+            # Win32 错误码；真机实测 2026-09-14：目标进程已退出时旧报错为
+            # "WinError -2147024597"，无法定位。此处解码 + 常见原因提示。
+            code = err & 0xFFFF
+            raw = err & 0xFFFFFFFF
+            hint = ""
+            if code == 299:  # ERROR_PARTIAL_COPY
+                hint = "：目标进程可能已退出或部分内存不可读，请确认目标仍在运行"
+            elif code in (5, 6):  # ERROR_ACCESS_DENIED / ERROR_INVALID_HANDLE
+                hint = "：句柄无效或权限不足（需要 SeDebugPrivilege / 管理员）"
+            raise MemoryAccessError(
+                f"MiniDumpWriteDump 失败 (WinError {code}"
+                f"{f'/0x{raw:08X}' if raw != code else ''}){hint}"
+            )
     finally:
         kernel32.CloseHandle(ctypes.c_void_p(file_handle))
 

@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 from openai import AsyncStream, Omit, OpenAIError, omit
+from openai.types import ReasoningEffort
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from kosong.contrib.chat_provider.openai_common import (

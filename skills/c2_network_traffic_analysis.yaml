@@ -1,0 +1,47 @@
+# 来源：方法论改编自 meltedinhex/analyst-ai-pack: capturing-and-analyzing-malware-network-traffic（Apache-2.0）
+# 适配：WinReverseAgent 内置动作（pe.* / memory.* / yara.* / die.* / net.* / fs.* / shell.run / behavior.*）
+# ATT&CK: T1071.001, T1071.004, T1571
+name: "C2 网络流量分析"
+description: "抓包或解析 pcap，还原 C2 端点、DNS 模式、HTTP 特征与心跳规律，产出网络 IOC 与检测依据。"
+target: "恶意软件网络流量 / pcap"
+
+parameters:
+  - name: "file_path"
+    type: "string"
+    default: ""
+    description: "已有 pcap 路径（CLI: -f；留空则被动抓包）"
+    required: false
+  - name: "seconds"
+    type: "int"
+    default: 60
+    description: "被动抓包时长（秒），仅 file_path 为空时使用"
+    required: false
+
+prompt_template: |
+  任务：分析 C2 通信。
+  输入：pcap={{file_path}}（空则实时抓包 {{seconds}} 秒）
+
+  步骤：
+  1. net.interfaces 记录网卡与地址（抓包的上下文）。
+  2. 有 pcap 就 net.read_pcap 解析；否则 net.live_capture 抓 {{seconds}} 秒后再解析。
+  3. 从流量中提取：
+     - **DNS**：查询域名、是否有 DGA 特征（长度/熵/数字比例）、异常 TLD、高频 NXDOMAIN
+     - **HTTP/HTTPS**：Host/URI/UA/Cookie、POST 体积与周期；TLS 的 SNI 与证书信息（若可见）
+     - **端点**：IP:端口 频次表，区分内网/公网
+     - **心跳**：连接/请求的时间间隔规律（是否有固定 sleep+jitter）
+  4. 需要修订/裁剪证据包时用 net.edit_pcap（保留原始包，导出为新文件）。
+
+  输出：
+  - 会话与端点表（按字节数与频次排序）
+  - 疑似 C2 端点清单：IP/域名/端口/协议/判据（明确区分「已确认」与「疑似」）
+  - 心跳规律与周期结论（给时间序列证据）
+  - **网络 IOC**（域名/IP/URI/UA）与检测建议（防火墙/代理/IDS 规则方向）
+  - 数据外传迹象（大流量上行、可疑上传路径）
+
+  注意事项：
+  - 分析在隔离环境进行，**不要回连**任何提取到的 C2 地址。
+  - 加密流量只能给元数据结论，不要声称"看懂了内容"。
+
+execution_flow:
+  - action: "net.interfaces"
+    args: {}

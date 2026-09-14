@@ -22,6 +22,10 @@
 !/assets/
 !/vendor/
 !/packages/
+!/tools/
+# tools/ 只放行清单文件；下载的工具二进制/目录仍忽略（避免把 tshark.exe 之类提交进仓库）
+/tools/*
+!/tools/manifest.yaml
 
 # —— 忽略（白名单外的根目录与常见垃圾）——
 !/*_backup*    # 暂不启用；保持严格白名单
@@ -37,9 +41,12 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
-/tools/
+# 注：tools/ 的忽略规则已上移到根目录白名单块（见 `!/tools/` + `/tools/*` + `!/tools/manifest.yaml`），
+# 此处不再重复整目录忽略，否则会覆盖白名单、导致 tools/manifest.yaml 永远提交不进去。
 .bak/
 _*.py
+!__init__.py
+!_base.py
 _*.ps1
 _*.txt
 config.toml

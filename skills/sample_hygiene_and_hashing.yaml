@@ -1,0 +1,48 @@
+# 来源：方法论改编自 meltedinhex/analyst-ai-pack: handling-malware-samples-safely + hashing-and-fingerprinting-files（Apache-2.0）
+# 适配：WinReverseAgent 内置动作（pe.* / memory.* / yara.* / die.* / net.* / fs.* / shell.run / behavior.*）
+# ATT&CK: T1027
+name: "样本安全处置与指纹"
+description: "按取证规范接收/存放/传递恶意样本：先算哈希与真实类型，规范命名与归档，确保样本身份唯一、可追溯、不外泄。"
+target: "恶意样本文件"
+
+parameters:
+  - name: "file_path"
+    type: "string"
+    description: "样本路径（CLI: -f）"
+    required: true
+  - name: "vault_dir"
+    type: "string"
+    default: ""
+    description: "样本库目录（按哈希归档）；留空则只做指纹不移动"
+    required: false
+
+prompt_template: |
+  任务：对样本 {{file_path}} 做规范化处置与指纹。
+  样本库：{{vault_dir}}（留空 = 不移动文件）
+
+  步骤：
+  1. **真实类型**：不信任扩展名。用 fs.read_file（读头部魔数）与 die.scan_file（类型/编译器）交叉判定，
+     指出「扩展名与实际类型是否一致」（不一致是伪装迹象，必须写进报告）。
+  2. **指纹**：shell.run 计算 `certutil -hashfile "{{file_path}}" SHA256`（Windows 原生可用）、
+     以及 MD5/SHA1；PE 另取 pe.meta 的 imphash（家族聚类用）。
+  3. **规范命名**：建议 `<sha256前8位>_<家族或unknown>_<真实类型>.<ext>`。
+  4. **归档（仅当 vault_dir 非空）**：按哈希前两位建子目录存放，**若为可执行样本应压缩为带口令的归档**
+     （约定口令在报告里写明，不要写进文件名），并生成 `manifest.csv`（sha256,原始文件名,来源,时间,分析人）。
+  5. **链式保管**：输出一份 `chain-of-custody.txt`：来源、接收时间、每次操作的哈希与操作人。
+
+  输出：样本身份卡（哈希/类型/大小/是否伪装）+ 归档路径 + 保管记录摘要。
+
+  注意事项：
+  - 任何写操作前先确认不在证据原始目录内操作（先复制再处理）。
+  - 不要为了"看清楚"而改扩展名后双击；不要上传到公共平台（除非已脱敏且获授权）。
+
+execution_flow:
+  - action: "die.scan_file"
+    args:
+      file_path: "{{file_path}}"
+  - action: "pe.meta"
+    args:
+      file_path: "{{file_path}}"
+  - action: "shell.run"
+    args:
+      command: "certutil -hashfile \"{{file_path}}\" SHA256"

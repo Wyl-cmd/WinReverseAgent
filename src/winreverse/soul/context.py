@@ -129,6 +129,9 @@ class ContextManager:
                 return self._resolve_includes(included, full_path.parent, seen)
             except OSError:
                 return f"[error reading include: {rel_path}]"
+            finally:
+                # 回溯退出当前引用链：仅沿链判环，允许同一文件被多处合法复用
+                seen.discard(full_path)
 
         return include_pattern.sub(_replace, content)
 

@@ -61,7 +61,9 @@ async def verify_tui() -> None:
 
         # 验证 api_key Input
         api_key_input = llm_pane.query_one("#api-key", Input)
-        print(f"[6] API Key Input (password={api_key_input.password}): {'***' if api_key_input.value else '(空)'}")
+        print(
+            f"[6] API Key Input (password={api_key_input.password}): {'***' if api_key_input.value else '(空)'}"
+        )
 
         # 验证 max_tokens Input
         max_tokens_input = llm_pane.query_one("#max-tokens", Input)

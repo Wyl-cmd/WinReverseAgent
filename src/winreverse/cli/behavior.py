@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
 
@@ -44,6 +45,7 @@ def monitor(
         if sessions_root
         else ProcessIsolationRunner()
     )
+    session_id: str | None = None
     try:
         session_id = runner.prepare(str(sample_path), {})
         runner.run(session_id, duration=duration)
@@ -51,6 +53,12 @@ def monitor(
     except BehaviorError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from e
+    finally:
+        # 报告已采集，清理样本副本与残留进程（对齐 engine 层行为工具口径：
+        # 样本常驻时不得无人处置；销毁失败不影响命令退出）
+        if session_id is not None:
+            with contextlib.suppress(Exception):
+                runner.destroy(session_id)
 
     overview = Table(box=box.ROUNDED, title="行为监控报告")
     overview.add_column("字段", style="cyan")

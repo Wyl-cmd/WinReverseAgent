@@ -89,8 +89,10 @@ def make_logo(source: Path) -> tuple[Path, Path]:
 
 def main() -> int:
     """入口：解析源图路径（参数或默认），生成资产。"""
-    source = Path(sys.argv[1]) if len(sys.argv) > 1 else next(
-        (p for p in DEFAULT_SOURCES if p.is_file()), DEFAULT_SOURCES[0]
+    source = (
+        Path(sys.argv[1])
+        if len(sys.argv) > 1
+        else next((p for p in DEFAULT_SOURCES if p.is_file()), DEFAULT_SOURCES[0])
     )
     logo_path, ico_path = make_logo(source)
     print(f"logo: {logo_path}")
