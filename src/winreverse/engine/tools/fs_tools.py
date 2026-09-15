@@ -45,7 +45,7 @@ class FsReadFileTool(BaseTool):
 
     name = "fs.read_file"
     description = (
-        "读取文本文件内容（支持行范围、最大 256KB 截断）；" "二进制文件返回十六进制预览与 base64"
+        "读取文本文件内容（支持行范围、最大 256KB 截断）；二进制文件返回十六进制预览与 base64"
     )
 
     def _run(self, input_data: dict[str, Any]) -> dict[str, Any]:

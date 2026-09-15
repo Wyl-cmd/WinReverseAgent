@@ -48,9 +48,7 @@ class TestInputValidation:
 class TestSubprocessFailureBranches:
     """subprocess 异常分支（打桩，双平台等价）。"""
 
-    def test_timeout_returns_timed_out_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_timeout_returns_timed_out_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _raise_timeout(argv: list[str], **kwargs: Any):
             raise subprocess.TimeoutExpired(cmd=argv, timeout=kwargs["timeout"])
 
@@ -61,9 +59,7 @@ class TestSubprocessFailureBranches:
         assert "超时" in result["error_message"]
         assert ">1s" in result["error_message"]
 
-    def test_missing_shell_becomes_runtime_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_shell_becomes_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _raise_not_found(argv: list[str], **kwargs: Any):
             raise FileNotFoundError(2, "No such file", "cmd.exe")
 
@@ -122,16 +118,12 @@ class TestDangerousGuard:
         monkeypatch.delenv("WINREVERSE_YOLO", raising=False)
         captured: list[Any] = []
         monkeypatch.setattr(shell_tools.subprocess, "run", _fake_run(capture=captured))
-        result = ShellRunTool().execute(
-            {"command": "format.com /?", "allow_dangerous": True}
-        )
+        result = ShellRunTool().execute({"command": "format.com /?", "allow_dangerous": True})
         assert result["status"] == "success"
         assert captured, "放行后必须真的下发执行"
 
     @pytest.mark.parametrize("value", ["1", "true", "yes", "YES"])
-    def test_yolo_env_bypasses_guard(
-        self, value: str, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_yolo_env_bypasses_guard(self, value: str, monkeypatch: pytest.MonkeyPatch) -> None:
         # WINREVERSE_YOLO 放行危险命令 —— 必须打桩 subprocess，否则会真的下发
         # `shutdown /r`（真机上直接重启系统，导致测试自身把被测 VM 打掉）。
         monkeypatch.setenv("WINREVERSE_YOLO", value)

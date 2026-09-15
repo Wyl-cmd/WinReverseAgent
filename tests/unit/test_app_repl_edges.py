@@ -109,9 +109,7 @@ class TestRunRepl:
 class TestM1CompatEntries:
     """M1 兼容入口（不触发初始化链）。"""
 
-    def test_run_prints_version_banner(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_prints_version_banner(self, capsys: pytest.CaptureFixture[str]) -> None:
         agent = Agent(config=AgentConfig())
         assert agent.run() == 0
         out = capsys.readouterr().out

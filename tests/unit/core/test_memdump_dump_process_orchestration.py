@@ -38,9 +38,7 @@ def _region(
     )
 
 
-def _fake_read(
-    handle: int, region: md.MemoryRegion, max_bytes: int | None = None
-) -> bytes:
+def _fake_read(handle: int, region: md.MemoryRegion, max_bytes: int | None = None) -> bytes:
     """按 read_region 的实际契约返回数据：受 max_bytes 预算限制。"""
     return b"\x90" * min(region.size, max_bytes if max_bytes is not None else region.size)
 
@@ -64,9 +62,7 @@ class TestDumpProcessOrchestration:
         )
         reserved = _region(0x400000, 0x100000, md.MEM_RESERVE, md.PAGE_READONLY, md.MEM_PRIVATE)
         regions = [suspicious, image, reserved]
-        monkeypatch.setattr(
-            md, "enumerate_regions", lambda handle, only_committed=True: regions
-        )
+        monkeypatch.setattr(md, "enumerate_regions", lambda handle, only_committed=True: regions)
         monkeypatch.setattr(md, "read_region", _fake_read)
 
         result = md.dump_process(0xDEADBEEF, tmp_path)
@@ -105,9 +101,7 @@ class TestDumpProcessOrchestration:
     ) -> None:
         """读取全空时必须报错而非写出空 manifest 假证据（2026-09-12 修复回归锁）。"""
         region = _region(0x10000, 0x2000, md.MEM_COMMIT, md.PAGE_READWRITE, md.MEM_PRIVATE)
-        monkeypatch.setattr(
-            md, "enumerate_regions", lambda handle, only_committed=True: [region]
-        )
+        monkeypatch.setattr(md, "enumerate_regions", lambda handle, only_committed=True: [region])
         monkeypatch.setattr(md, "read_region", lambda handle, region, max_bytes=None: b"")
 
         with pytest.raises(md.MemoryAccessError) as excinfo:
@@ -125,14 +119,10 @@ class TestDumpProcessOrchestration:
     ) -> None:
         r0 = _region(0x10000, 0x4000, md.MEM_COMMIT, md.PAGE_READWRITE, md.MEM_PRIVATE)
         r1 = _region(0x20000, 0x4000, md.MEM_COMMIT, md.PAGE_READWRITE, md.MEM_PRIVATE)
-        monkeypatch.setattr(
-            md, "enumerate_regions", lambda handle, only_committed=True: [r0, r1]
-        )
+        monkeypatch.setattr(md, "enumerate_regions", lambda handle, only_committed=True: [r0, r1])
         calls: list[tuple[int, int | None]] = []
 
-        def _spy_read(
-            handle: int, region: md.MemoryRegion, max_bytes: int | None = None
-        ) -> bytes:
+        def _spy_read(handle: int, region: md.MemoryRegion, max_bytes: int | None = None) -> bytes:
             calls.append((region.base_address, max_bytes))
             return _fake_read(handle, region, max_bytes)
 
@@ -154,9 +144,7 @@ class TestDumpProcessOrchestration:
     ) -> None:
         """输出目录路径被同名文件占用 → mkdir 失败须映射为 MemoryAccessError。"""
         region = _region(0x10000, 0x2000, md.MEM_COMMIT, md.PAGE_READWRITE, md.MEM_PRIVATE)
-        monkeypatch.setattr(
-            md, "enumerate_regions", lambda handle, only_committed=True: [region]
-        )
+        monkeypatch.setattr(md, "enumerate_regions", lambda handle, only_committed=True: [region])
         blocker = tmp_path / "blocker"
         blocker.write_bytes(b"x")
 
@@ -168,9 +156,7 @@ class TestWriteManifest:
     """_write_manifest 直测：summary 合并、区域条目序列化、UTF-8 无 BOM JSON。"""
 
     def test_manifest_contains_summary_and_region_entries(self, tmp_path: Path) -> None:
-        region = _region(
-            0x420000, 0x1000, md.MEM_COMMIT, md.PAGE_EXECUTE_READ, md.MEM_MAPPED
-        )
+        region = _region(0x420000, 0x1000, md.MEM_COMMIT, md.PAGE_EXECUTE_READ, md.MEM_MAPPED)
         entry = md._RegionDumpEntry(
             file="region_0000_0000420000.bin",
             region=region,

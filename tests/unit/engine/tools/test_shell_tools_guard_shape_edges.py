@@ -54,8 +54,15 @@ class TestYoloEnvTruthTable:
 
     @pytest.mark.parametrize(
         ("raw", "expected"),
-        [("1", True), ("true", True), ("YES", True), ("True", True),
-         ("0", False), ("", False), ("off", False)],
+        [
+            ("1", True),
+            ("true", True),
+            ("YES", True),
+            ("True", True),
+            ("0", False),
+            ("", False),
+            ("off", False),
+        ],
     )
     def test_values(self, monkeypatch: pytest.MonkeyPatch, raw: str, expected: bool) -> None:
         monkeypatch.setenv("WINREVERSE_YOLO", raw)

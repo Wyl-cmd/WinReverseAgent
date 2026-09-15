@@ -69,8 +69,7 @@ class MemoryRegionsTool(BaseTool):
             # 取证链上即产生**假阴性**证据。真机实测 2026-09-14：
             # attach 后目标进程退出 → 旧行为 status=success / total=0。
             raise memdump_api.MemoryAccessError(
-                f"未枚举到任何已提交内存区域（pid={pid}）：目标句柄可能无效、"
-                "进程已退出或无权限"
+                f"未枚举到任何已提交内存区域（pid={pid}）：目标句柄可能无效、进程已退出或无权限"
             )
         suspicious = [r for r in committed if r.is_suspicious]
 
@@ -136,8 +135,7 @@ class MemoryMinidumpTool(BaseTool):
 
     name = "memory.dump_minidump"
     description = (
-        "生成标准 minidump（.dmp，含完整内存），可交给 WinDbg / Volatility 等"
-        "外部取证工具做深度分析"
+        "生成标准 minidump（.dmp，含完整内存），可交给 WinDbg / Volatility 等外部取证工具做深度分析"
     )
 
     def _run(self, input_data: dict[str, Any]) -> dict[str, Any]:

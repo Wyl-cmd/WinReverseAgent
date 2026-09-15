@@ -27,8 +27,11 @@ class TestImageSecVariant:
 
     def test_sec_variant_is_image_not_mapped(self) -> None:
         region = MemoryRegion(
-            base_address=0x7FF0000, size=0x1000, state=MEM_COMMIT,
-            protect=PAGE_EXECUTE_READ, type=MEM_IMAGE_SEC,
+            base_address=0x7FF0000,
+            size=0x1000,
+            state=MEM_COMMIT,
+            protect=PAGE_EXECUTE_READ,
+            type=MEM_IMAGE_SEC,
         )
         assert region.is_image is True
         assert region.is_mapped is False
@@ -37,8 +40,11 @@ class TestImageSecVariant:
 
     def test_plain_image_type_name(self) -> None:
         region = MemoryRegion(
-            base_address=0x400000, size=0x1000, state=MEM_COMMIT,
-            protect=PAGE_READWRITE, type=MEM_IMAGE,
+            base_address=0x400000,
+            size=0x1000,
+            state=MEM_COMMIT,
+            protect=PAGE_READWRITE,
+            type=MEM_IMAGE,
         )
         assert region.type_name == "image"
 
@@ -48,22 +54,31 @@ class TestSuspiciousBeyondPrivate:
 
     def test_image_rwx_is_suspicious(self) -> None:
         region = MemoryRegion(
-            base_address=0x7FF0000, size=0x2000, state=MEM_COMMIT,
-            protect=PAGE_EXECUTE_READWRITE, type=MEM_IMAGE_SEC,
+            base_address=0x7FF0000,
+            size=0x2000,
+            state=MEM_COMMIT,
+            protect=PAGE_EXECUTE_READWRITE,
+            type=MEM_IMAGE_SEC,
         )
         assert region.is_suspicious is True
 
     def test_image_rx_not_suspicious(self) -> None:
         region = MemoryRegion(
-            base_address=0x7FF0000, size=0x2000, state=MEM_COMMIT,
-            protect=PAGE_EXECUTE_READ, type=MEM_IMAGE,
+            base_address=0x7FF0000,
+            size=0x2000,
+            state=MEM_COMMIT,
+            protect=PAGE_EXECUTE_READ,
+            type=MEM_IMAGE,
         )
         assert region.is_suspicious is False
 
     def test_private_exec_read_is_suspicious(self) -> None:
         region = MemoryRegion(
-            base_address=0x1000, size=0x1000, state=MEM_COMMIT,
-            protect=PAGE_EXECUTE_READ, type=MEM_PRIVATE,
+            base_address=0x1000,
+            size=0x1000,
+            state=MEM_COMMIT,
+            protect=PAGE_EXECUTE_READ,
+            type=MEM_PRIVATE,
         )
         assert region.is_executable is True
         assert region.is_writable is False
@@ -75,16 +90,22 @@ class TestWritabilityTable:
 
     def test_execute_read_not_writable(self) -> None:
         region = MemoryRegion(
-            base_address=0x2000, size=0x1000, state=MEM_COMMIT,
-            protect=PAGE_EXECUTE_READ, type=MEM_MAPPED,
+            base_address=0x2000,
+            size=0x1000,
+            state=MEM_COMMIT,
+            protect=PAGE_EXECUTE_READ,
+            type=MEM_MAPPED,
         )
         assert region.is_writable is False
         assert region.is_executable is True
 
     def test_readwrite_mapped_writable(self) -> None:
         region = MemoryRegion(
-            base_address=0x3000, size=0x1000, state=MEM_COMMIT,
-            protect=PAGE_READWRITE, type=MEM_MAPPED,
+            base_address=0x3000,
+            size=0x1000,
+            state=MEM_COMMIT,
+            protect=PAGE_READWRITE,
+            type=MEM_MAPPED,
         )
         assert region.is_writable is True
 
@@ -94,8 +115,11 @@ class TestToDictRawPassthrough:
 
     def test_sec_variant_to_dict(self) -> None:
         region = MemoryRegion(
-            base_address=0xABC000, size=4096, state=MEM_COMMIT,
-            protect=PAGE_EXECUTE_READWRITE, type=MEM_IMAGE_SEC,
+            base_address=0xABC000,
+            size=4096,
+            state=MEM_COMMIT,
+            protect=PAGE_EXECUTE_READWRITE,
+            type=MEM_IMAGE_SEC,
         )
         d = region.to_dict()
         assert d["type"] == "image"

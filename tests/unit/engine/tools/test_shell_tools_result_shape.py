@@ -38,19 +38,13 @@ def _capture_run(
 class TestResultShape:
     """结果字典形态（返回码标注、全键、stderr）。"""
 
-    def test_nonzero_returncode_marks_status_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            shell_tools.subprocess, "run", _capture_run(returncode=3)
-        )
+    def test_nonzero_returncode_marks_status_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(shell_tools.subprocess, "run", _capture_run(returncode=3))
         result = ShellRunTool().execute({"command": "exit 3"})
         assert result["status"] == "error"
         assert result["returncode"] == 3
 
-    def test_success_result_has_full_shape(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_success_result_has_full_shape(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             shell_tools.subprocess,
             "run",
@@ -80,33 +74,25 @@ class TestInvocationParams:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         calls: list[dict[str, Any]] = []
-        monkeypatch.setattr(
-            shell_tools.subprocess, "run", _capture_run(calls=calls)
-        )
+        monkeypatch.setattr(shell_tools.subprocess, "run", _capture_run(calls=calls))
         ShellRunTool().execute({"command": "cd", "cwd": str(tmp_path)})
         assert calls[0]["cwd"] == str(Path(str(tmp_path)).resolve())
 
     def test_no_cwd_passes_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls: list[dict[str, Any]] = []
-        monkeypatch.setattr(
-            shell_tools.subprocess, "run", _capture_run(calls=calls)
-        )
+        monkeypatch.setattr(shell_tools.subprocess, "run", _capture_run(calls=calls))
         ShellRunTool().execute({"command": "cd"})
         assert calls[0]["cwd"] is None
 
     def test_default_timeout_is_120s(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls: list[dict[str, Any]] = []
-        monkeypatch.setattr(
-            shell_tools.subprocess, "run", _capture_run(calls=calls)
-        )
+        monkeypatch.setattr(shell_tools.subprocess, "run", _capture_run(calls=calls))
         ShellRunTool().execute({"command": "ping -n 1 127.0.0.1"})
         assert calls[0]["timeout"] == 120
 
     def test_custom_timeout_forwarded(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls: list[dict[str, Any]] = []
-        monkeypatch.setattr(
-            shell_tools.subprocess, "run", _capture_run(calls=calls)
-        )
+        monkeypatch.setattr(shell_tools.subprocess, "run", _capture_run(calls=calls))
         ShellRunTool().execute({"command": "dir", "timeout": 5})
         assert calls[0]["timeout"] == 5
 
@@ -115,9 +101,7 @@ class TestYoloFalseValues:
     """WINREVERSE_YOLO 假值不得豁免危险命令守卫（真值放行已在 edges 文件覆盖）。"""
 
     @pytest.mark.parametrize("value", ["0", "false", "no", "", "off"])
-    def test_falsy_yolo_still_blocks(
-        self, value: str, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_falsy_yolo_still_blocks(self, value: str, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("WINREVERSE_YOLO", value)
         result = ShellRunTool().execute({"command": "shutdown /s"})
         assert result["status"] == "error"

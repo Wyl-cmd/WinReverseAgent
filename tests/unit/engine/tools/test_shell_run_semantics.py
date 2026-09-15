@@ -33,9 +33,7 @@ def _fake_run(stdout: str = "ok", returncode: int = 0, capture: list[Any] | None
 class TestReturnCodeSemantics:
     """返回码 → status 语义（BaseTool 只在异常置 error，非零码由此处补标）。"""
 
-    def test_nonzero_returncode_marks_status_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_nonzero_returncode_marks_status_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(shell_tools.subprocess, "run", _fake_run(returncode=3))
         result = ShellRunTool().execute({"command": "dir missing"})
         assert result["status"] == "error"
@@ -43,9 +41,7 @@ class TestReturnCodeSemantics:
         assert result["command"] == "dir missing"
         assert result["shell"] == "cmd"
 
-    def test_zero_returncode_keeps_success(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_zero_returncode_keeps_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(shell_tools.subprocess, "run", _fake_run(returncode=0))
         result = ShellRunTool().execute({"command": "echo ok"})
         assert result["status"] == "success"
@@ -55,9 +51,7 @@ class TestReturnCodeSemantics:
 class TestCwdHandling:
     """cwd 解析：相对路径 resolve 为绝对路径字符串；空值不下发 cwd。"""
 
-    def test_relative_cwd_resolved_to_absolute(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_relative_cwd_resolved_to_absolute(self, monkeypatch: pytest.MonkeyPatch) -> None:
         captured: list[Any] = []
         monkeypatch.setattr(shell_tools.subprocess, "run", _fake_run(capture=captured))
         ShellRunTool().execute({"command": "dir", "cwd": "."})
@@ -87,9 +81,7 @@ class TestTruncateFlagByteSemantics:
         assert len(result["stdout"]) == 40000
 
     def test_exactly_64kb_is_not_truncated(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            shell_tools.subprocess, "run", _fake_run(stdout="A" * _TRUNC)
-        )
+        monkeypatch.setattr(shell_tools.subprocess, "run", _fake_run(stdout="A" * _TRUNC))
         result = ShellRunTool().execute({"command": "echo big"})
         assert result["truncated"] is False
         assert len(result["stdout"]) == _TRUNC
@@ -131,9 +123,7 @@ class TestYoloFalsyValues:
     """_yolo_enabled 假值矩阵：未设置 / 0 / off 均不豁免。"""
 
     @pytest.mark.parametrize("env", [None, "0", "off", ""])
-    def test_falsy_env_keeps_guard(
-        self, env: str | None, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_falsy_env_keeps_guard(self, env: str | None, monkeypatch: pytest.MonkeyPatch) -> None:
         if env is None:
             monkeypatch.delenv("WINREVERSE_YOLO", raising=False)
         else:

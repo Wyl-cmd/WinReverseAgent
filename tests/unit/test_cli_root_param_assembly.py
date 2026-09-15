@@ -78,23 +78,22 @@ class TestSkillParamAssembly:
         assert result.exit_code == 0, result.output
         assert "最终答复: done" in result.output
         assert agent.calls == [
-            ("PE 文件分析", {
-                "depth": "3",
-                "verbose": "true",
-                "file_path": str(target),
-                "process_name": "notepad.exe",
-            })
+            (
+                "PE 文件分析",
+                {
+                    "depth": "3",
+                    "verbose": "true",
+                    "file_path": str(target),
+                    "process_name": "notepad.exe",
+                },
+            )
         ]
 
-    def test_duplicate_p_key_last_wins(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_duplicate_p_key_last_wins(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """同名 -P 键重复时后者覆盖前者（dict 赋值语义）。"""
         agent = _RecordingAgent()
         monkeypatch.setattr(cli_module, "create_agent_from_config", lambda config: agent)
-        result = runner.invoke(
-            cli_app, ["skill", "s", "-P", "k=1", "-P", "k=2"]
-        )
+        result = runner.invoke(cli_app, ["skill", "s", "-P", "k=1", "-P", "k=2"])
         assert result.exit_code == 0, result.output
         assert agent.calls[0][1]["k"] == "2"
 
@@ -121,9 +120,7 @@ class TestProjectRootAndInteractive:
         monkeypatch.chdir(deep)
         assert cli_module._get_project_root() == deep
 
-    def test_interactive_true_when_stdout_tty(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_interactive_true_when_stdout_tty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _Tty:
             def isatty(self) -> bool:
                 return True
@@ -131,9 +128,7 @@ class TestProjectRootAndInteractive:
         monkeypatch.setattr(sys, "stdout", _Tty())
         assert cli_module._stdout_is_interactive() is True
 
-    def test_interactive_false_when_piped_or_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_interactive_false_when_piped_or_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class _Pipe:
             def isatty(self) -> bool:
                 return False

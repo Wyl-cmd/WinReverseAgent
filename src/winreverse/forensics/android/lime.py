@@ -69,7 +69,7 @@ def build_lime_guide(
         # 1. 推送内核模块（用户自行编译，本项目不分发 GPL 二进制）
         f"adb -s {serial} push {local_module_path} {module_path}",
         # 2. 加载模块采集内存（LiME 的 dd 格式：每页带地址元数据）
-        (f'adb -s {serial} shell "su -c ' f"'insmod {module_path} path={dump_path} format=lime'\""),
+        (f"adb -s {serial} shell \"su -c 'insmod {module_path} path={dump_path} format=lime'\""),
         # 3. 卸载模块
         f"adb -s {serial} shell \"su -c 'rmmod lime'\"",
         # 4. 拉取镜像到本地

@@ -46,10 +46,7 @@ class TestBuildFlags:
         flags = _build_flags(True, True, True)
         assert (
             flags
-            == FLAGS.RESULT_AS_JSON
-            | FLAGS.DEEP_SCAN
-            | FLAGS.HEURISTIC_SCAN
-            | FLAGS.RECURSIVE_SCAN
+            == FLAGS.RESULT_AS_JSON | FLAGS.DEEP_SCAN | FLAGS.HEURISTIC_SCAN | FLAGS.RECURSIVE_SCAN
         )
 
 
@@ -113,9 +110,7 @@ class TestScanBytesRaw:
 class TestJsonParsing:
     """scan_file / scan_bytes：空结果 → 空字典，坏 JSON → DieScanError。"""
 
-    def test_scan_file_empty_raw_returns_empty_dict(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_scan_file_empty_raw_returns_empty_dict(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(die_api.die, "scan_file", lambda *a, **k: "")
         assert scan_file("x.exe") == {}
 
@@ -132,9 +127,7 @@ class TestJsonParsing:
         with pytest.raises(DieScanError, match="JSON 解析失败"):
             scan_file("x.exe")
 
-    def test_scan_bytes_empty_raw_returns_empty_dict(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_scan_bytes_empty_raw_returns_empty_dict(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(die_api.die, "scan_memory", lambda *a, **k: "")
         assert scan_bytes(b"MZ") == {}
 

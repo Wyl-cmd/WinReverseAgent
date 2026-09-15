@@ -18,8 +18,7 @@ class TestCreateAgentFromConfigFile:
     def test_loads_toml_and_builds_lazy_agent(self, tmp_path: Path) -> None:
         config_path = tmp_path / "config.toml"
         config_path.write_text(
-            '[llm]\nmodel = "kimi-k2"\napi_key = "sk-test"\n\n'
-            '[agent]\nwork_dir = "C:\\\\cases"\n',
+            '[llm]\nmodel = "kimi-k2"\napi_key = "sk-test"\n\n[agent]\nwork_dir = "C:\\\\cases"\n',
             encoding="utf-8",
         )
 

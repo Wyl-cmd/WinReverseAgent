@@ -53,7 +53,7 @@ async def test_load_skills_with_yaml(tmp_path: Path) -> None:
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
     (skills_dir / "test_skill.yaml").write_text(
-        'name: "测试技能"\n' 'description: "用于单元测试的示例技能"\n' 'target: "通用"\n',
+        'name: "测试技能"\ndescription: "用于单元测试的示例技能"\ntarget: "通用"\n',
         encoding="utf-8",
     )
     config = AppConfig()
@@ -98,7 +98,7 @@ async def test_load_skills_yml_extension(tmp_path: Path) -> None:
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
     (skills_dir / "yml_skill.yml").write_text(
-        'name: "YML技能"\n' 'description: "yml 扩展名示例技能"\n' 'target: "通用"\n',
+        'name: "YML技能"\ndescription: "yml 扩展名示例技能"\ntarget: "通用"\n',
         encoding="utf-8",
     )
     config = AppConfig()
@@ -122,7 +122,7 @@ async def test_load_skills_invalid_files_show_error(tmp_path: Path) -> None:
     skills_dir = tmp_path / "skills"
     skills_dir.mkdir()
     (skills_dir / "good_skill.yaml").write_text(
-        'name: "正常技能"\n' 'description: "正常加载的示例技能"\n' 'target: "通用"\n',
+        'name: "正常技能"\ndescription: "正常加载的示例技能"\ntarget: "通用"\n',
         encoding="utf-8",
     )
     (skills_dir / "bad_syntax.yaml").write_text("name: [unclosed\n", encoding="utf-8")

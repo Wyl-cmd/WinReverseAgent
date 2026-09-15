@@ -27,15 +27,11 @@ class TestProbeVol:
         monkeypatch.setattr(shutil, "which", fake_which)
         assert VolatilityBridge._probe_vol() == Path("/usr/local/bin/vol")
 
-    def test_probe_miss_everything_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_probe_miss_everything_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(shutil, "which", lambda _name: None)
         assert VolatilityBridge._probe_vol() is None
 
-    def test_init_without_vol_reports_unavailable(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_init_without_vol_reports_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(shutil, "which", lambda _name: None)
         bridge = VolatilityBridge()
         assert bridge.is_available() is False

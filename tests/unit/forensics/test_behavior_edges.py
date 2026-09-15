@@ -39,9 +39,7 @@ from winreverse.forensics.behavior import (
 class TestSnapshotTolerance:
     """快照函数对消失进程 / 拒绝访问 / 竞态的容错。"""
 
-    def test_process_snapshot_skips_vanished(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_process_snapshot_skips_vanished(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class VanishedProc:
             @property
             def info(self) -> dict[str, Any]:
@@ -139,9 +137,7 @@ class TestPureHelpers:
 
 
 class TestSampleTreeConnections:
-    def test_filters_loopback_and_dead_pid(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_filters_loopback_and_dead_pid(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class FakeProcess:
             def __init__(self, pid: int) -> None:
                 if pid == 999:
@@ -181,9 +177,7 @@ class TestDiffOrchestration:
     ) -> None:
         session = _make_session(tmp_path)
         session.report = BehaviorReport(session_id="s1", sample="sample.exe")
-        monkeypatch.setattr(
-            behavior_module, "_snapshot_connections", lambda: {"9.9.9.9:53"}
-        )
+        monkeypatch.setattr(behavior_module, "_snapshot_connections", lambda: {"9.9.9.9:53"})
         monkeypatch.setattr(
             behavior_module,
             "_sample_tree_connections",

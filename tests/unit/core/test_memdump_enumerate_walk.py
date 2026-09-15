@@ -34,7 +34,9 @@ class TestEnumerateWalk:
         def fake_query(handle: int, address: int) -> Any:
             calls.append(address)
             if len(calls) == 1:
-                return _q(0x10000, 0x2000, md.MEM_COMMIT, md.PAGE_READWRITE, md.MEM_PRIVATE, 0x10000)
+                return _q(
+                    0x10000, 0x2000, md.MEM_COMMIT, md.PAGE_READWRITE, md.MEM_PRIVATE, 0x10000
+                )
             return None  # 第二次查询失败 → 终止
 
         monkeypatch.setattr(md, "_virtual_query", fake_query)
@@ -50,16 +52,12 @@ class TestEnumerateWalk:
 
     def test_walk_starts_past_null_page(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: list[int] = []
-        monkeypatch.setattr(
-            md, "_virtual_query", lambda h, a: seen.append(a) or None
-        )
+        monkeypatch.setattr(md, "_virtual_query", lambda h, a: seen.append(a) or None)
         regions = md.enumerate_regions(0xDEAD)
         assert regions == []
         assert seen == [md._PAGE_SIZE], "必须从 NULL 页之后起步且查询失败立即收尾"
 
-    def test_zero_size_region_skipped_without_hang(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_zero_size_region_skipped_without_hang(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def fake_query(handle: int, address: int) -> Any:
             if address == md._PAGE_SIZE:
                 return _q(0x1000, 0, md.MEM_COMMIT, md.PAGE_READWRITE, md.MEM_PRIVATE)

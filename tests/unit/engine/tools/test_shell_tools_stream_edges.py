@@ -38,9 +38,7 @@ class TestStreamEdgeSemantics:
         assert result["truncated"] is False
         assert result["stdout"] == "ok"
 
-    def test_none_streams_fall_back_to_empty_strings(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_none_streams_fall_back_to_empty_strings(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def _run(argv: list[str], **kwargs: Any):
             return SimpleNamespace(returncode=0, stdout=None, stderr=None)
 
@@ -51,9 +49,7 @@ class TestStreamEdgeSemantics:
         assert result["stderr"] == ""
         assert result["truncated"] is False
 
-    def test_uppercase_shell_name_is_normalized(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_uppercase_shell_name_is_normalized(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: list[list[str]] = []
 
         def _run(argv: list[str], **kwargs: Any):

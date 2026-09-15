@@ -53,7 +53,9 @@ class TestCompileGenericErrorBranch:
             compile_source("rule r { condition: true }")
         assert isinstance(ei.value.__cause__, yara.Error)
 
-    def test_compile_file_generic_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_compile_file_generic_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         def _boom(**_kwargs: Any) -> Any:
             raise yara.Error("corrupted file")
 

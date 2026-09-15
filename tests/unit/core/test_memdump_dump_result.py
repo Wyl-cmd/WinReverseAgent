@@ -99,21 +99,13 @@ class TestProtectSuffixes:
     """NOCACHE / WRITECOMBINE 修饰位后缀（GUARD 后缀已在既有文件覆盖）。"""
 
     def test_nocache_suffix(self) -> None:
-        assert (
-            _region(protect=md.PAGE_READONLY | md.PAGE_NOCACHE).protect_name
-            == "R+NOCACHE"
-        )
+        assert _region(protect=md.PAGE_READONLY | md.PAGE_NOCACHE).protect_name == "R+NOCACHE"
 
     def test_writecombine_suffix(self) -> None:
-        assert (
-            _region(protect=md.PAGE_READONLY | md.PAGE_WRITECOMBINE).protect_name
-            == "R+WC"
-        )
+        assert _region(protect=md.PAGE_READONLY | md.PAGE_WRITECOMBINE).protect_name == "R+WC"
 
     def test_all_modifiers_combined_in_order(self) -> None:
-        protect = (
-            md.PAGE_READWRITE | md.PAGE_GUARD | md.PAGE_NOCACHE | md.PAGE_WRITECOMBINE
-        )
+        protect = md.PAGE_READWRITE | md.PAGE_GUARD | md.PAGE_NOCACHE | md.PAGE_WRITECOMBINE
         assert _region(protect=protect).protect_name == "RW+GUARD+NOCACHE+WC"
 
 
@@ -179,9 +171,7 @@ class TestManifestFlags:
 
     def test_truncated_and_read_failed_roundtrip(self, tmp_path: Path) -> None:
         entries = [
-            md._RegionDumpEntry(
-                file="t.bin", region=_region(), size=0x10, truncated=True
-            ),
+            md._RegionDumpEntry(file="t.bin", region=_region(), size=0x10, truncated=True),
             md._RegionDumpEntry(
                 file="f.bin",
                 region=_region(base_address=0x20000),
@@ -190,9 +180,7 @@ class TestManifestFlags:
             ),
         ]
         md._write_manifest(tmp_path, entries, {"pid": 7})
-        manifest = json.loads(
-            (tmp_path / md._MANIFEST_NAME).read_text(encoding="utf-8")
-        )
+        manifest = json.loads((tmp_path / md._MANIFEST_NAME).read_text(encoding="utf-8"))
         first, second = manifest["regions"]
         assert first["truncated"] is True and first["read_failed"] is False
         assert second["truncated"] is False and second["read_failed"] is True

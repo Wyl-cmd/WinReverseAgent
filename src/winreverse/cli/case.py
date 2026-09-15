@@ -157,7 +157,7 @@ def add(
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from e
     console.print(
-        f"[green]证据已登记[/green] {evidence.evidence_id} " f"(SHA256: {evidence.sha256[:16]}...)"
+        f"[green]证据已登记[/green] {evidence.evidence_id} (SHA256: {evidence.sha256[:16]}...)"
     )
 
 

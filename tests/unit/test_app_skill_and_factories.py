@@ -81,9 +81,7 @@ class TestFactories:
         assert agent.config.yolo is False
 
     def test_create_agent_carries_explicit_config(self) -> None:
-        config = AgentConfig(
-            model="gpt-x", api_key="k", work_dir="/w", yolo=True, max_turns=7
-        )
+        config = AgentConfig(model="gpt-x", api_key="k", work_dir="/w", yolo=True, max_turns=7)
         agent = create_agent(config)
         assert agent.config is config
 

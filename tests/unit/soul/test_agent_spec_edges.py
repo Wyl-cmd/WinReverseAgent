@@ -85,7 +85,7 @@ class TestLaborMarketYmlDirectory:
         """*.yml 与 *.yaml 一并加载；缺 name 的坏文件跳过且不中断。"""
         (tmp_path / "a.yaml").write_text("name: alpha\ndescription: A\n", encoding="utf-8")
         (tmp_path / "b.yml").write_text(
-            "name: beta\ndescription: B\ntool_strategy: allowlist\n" "allowed_tools:\n  - t1\n",
+            "name: beta\ndescription: B\ntool_strategy: allowlist\nallowed_tools:\n  - t1\n",
             encoding="utf-8",
         )
         (tmp_path / "broken.yml").write_text("description: 没有 name\n", encoding="utf-8")

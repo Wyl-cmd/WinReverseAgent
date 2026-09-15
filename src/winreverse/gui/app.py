@@ -99,7 +99,6 @@ def _build_ui(dpg: Any, resolved_path: Path, form: Any) -> None:
     """构建完整 UI 树（run_gui 与无头自检共用）。"""
     with dpg.window(no_scrollbar=True, width=_WINDOW_WIDTH, height=_WINDOW_HEIGHT) as main_window:
         with dpg.tab_bar():
-
             # ---------------- LLM 配置 ----------------
             with dpg.tab(label="LLM 配置"), dpg.child_window(autosize_x=True, height=-60):
                 dpg.add_spacer(height=4)
