@@ -28,7 +28,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from winreverse.core.memory_api import MemoryAccessError
+from winreverse.core.memory_api import MemoryAccessError as MemoryAccessError
+
+# ↑ `as` 同名为显式再导出：mypy no_implicit_reexport=true 下其他模块
+#   （engine/tools/memscan_tools.py 等）才能合法引用 memdump_api.MemoryAccessError
 
 # =============================================================================
 # Windows 内存常量

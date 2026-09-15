@@ -26,6 +26,16 @@ from rich.console import Console
 from rich.table import Table
 
 
+def _is_windows() -> bool:
+    """当前平台是否为 Windows（运行期判定）。
+
+    不直接比较 sys.platform：mypy(warn_unreachable) 会把 sys.platform 的
+    字面量比较常量折叠，在 Windows 目标下把非 win32 分支判为 unreachable；
+    包成函数后两个分支都可静态到达，测试仍可用 monkeypatch 改 sys.platform。
+    """
+    return sys.platform == "win32"
+
+
 @dataclass
 class CheckResult:
     """单项检查结果。"""
@@ -114,9 +124,10 @@ def _check_core_contracts() -> CheckResult:
 
 def _check_platform() -> CheckResult:
     """检查运行平台。"""
-    if sys.platform == "win32":
+    if _is_windows():
         return CheckResult(name="运行平台", status="ok", message="Windows")
-    # 非 Windows 平台分支（mypy 在 Windows 上会判定为 unreachable，但保留跨平台兼容）
+    # 非 Windows 平台分支（跨平台兼容保留；_is_windows() 为运行期判定，
+    # 规避 mypy warn_unreachable 在 Windows 目标下把本分支判为 unreachable）
     return CheckResult(
         name="运行平台",
         status="warn",

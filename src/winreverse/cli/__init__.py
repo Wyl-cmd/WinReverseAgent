@@ -37,6 +37,16 @@ from winreverse.skill.executor import SkillExecutionError
 from winreverse.skill.loader import SkillNotFoundError
 
 
+def _is_windows() -> bool:
+    """当前平台是否为 Windows（运行期判定）。
+
+    不直接比较 sys.platform：mypy(warn_unreachable) 会把 sys.platform 的
+    字面量比较常量折叠，在 Windows 目标下把非 win32 分支判为 unreachable；
+    包成函数后两个分支都可静态到达，测试仍可用 monkeypatch 改 sys.platform。
+    """
+    return sys.platform == "win32"
+
+
 def _reconfigure_streams_utf8() -> None:
     """Windows 下把 stdout/stderr 重配置为 UTF-8（不可编码字符降级为 ?）。
 
@@ -44,9 +54,9 @@ def _reconfigure_streams_utf8() -> None:
     打印中文帮助文本会直接 UnicodeEncodeError 崩溃（--help 在回调前渲染，
     必须在模块导入期完成重配置）。交互式控制台本就走 UTF-8（PEP 528），不受影响。
     """
-    if sys.platform != "win32":
+    if not _is_windows():
         return
-    for stream in (sys.stdout, sys.stderr):  # type: ignore[unreachable]
+    for stream in (sys.stdout, sys.stderr):
         if stream is not None and hasattr(stream, "reconfigure"):
             with contextlib.suppress(OSError, ValueError):
                 stream.reconfigure(encoding="utf-8", errors="replace")
