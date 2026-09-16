@@ -187,6 +187,25 @@ def _snapshot_processes() -> dict[int, dict[str, Any]]:
     return snapshot
 
 
+def _process_info(pid: int) -> dict[str, Any] | None:
+    """单个进程的四要素（ppid/name/cmdline/create_time）。
+
+    进程已退出 / 无权限时返回 None —— 供样本启动瞬间归档进程信息，
+    避免短命样本退出后进程树无法重建（真机实测 2026-09-15 暴露）。
+    """
+    try:
+        proc = psutil.Process(pid)
+        with proc.oneshot():
+            return {
+                "ppid": proc.ppid(),
+                "name": proc.name() or "",
+                "cmdline": " ".join(proc.cmdline() or [])[:500],
+                "create_time": proc.create_time() or 0,
+            }
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        return None
+
+
 def _snapshot_connections() -> set[str]:
     """网络连接快照：远端 endpoint 集合（排除回环/未连接）。"""
     endpoints: set[str] = set()
@@ -370,6 +389,8 @@ class _Session:
     baseline_registry: dict[str, dict[str, str]] = field(default_factory=dict)
     proc: subprocess.Popen[bytes] | None = None
     sample_pids: set[int] = field(default_factory=set)
+    # 样本树进程信息归档（pid → 四要素）：样本退出后仍可重建进程树
+    sample_process_info: dict[int, dict[str, Any]] = field(default_factory=dict)
     ran: bool = False
     report: BehaviorReport | None = None
 
@@ -492,6 +513,10 @@ class ProcessIsolationRunner:
         except OSError as e:
             raise BehaviorError(f"样本启动失败: {e}") from e
         session.sample_pids.add(session.proc.pid)
+        root_info = _process_info(session.proc.pid)
+        if root_info is not None:
+            # 样本自身进程在启动瞬间归档（它通常不会出现在子进程事件里）
+            session.sample_process_info[session.proc.pid] = root_info
         session.ran = True
 
         try:
@@ -588,6 +613,7 @@ class ProcessIsolationRunner:
             if info["ppid"] in session.sample_pids:
                 # 样本树内的子进程
                 session.sample_pids.add(pid)
+                session.sample_process_info[pid] = {k: v for k, v in info.items() if k != "pid"}
                 report.events.append(
                     BehaviorEvent(
                         timestamp=_now_iso(),
@@ -670,7 +696,9 @@ class ProcessIsolationRunner:
 
         processes = _snapshot_processes()
         for pid in sorted(session.sample_pids):
-            info = processes.get(pid)
+            # 样本树进程优先取实时快照；进程已退出则回退到归档信息
+            # （短命样本收尾时 pid 已不存在，仅靠实时快照会丢整棵进程树）
+            info = processes.get(pid) or session.sample_process_info.get(pid)
             if info:
                 report.process_tree.append({"pid": pid, **info})
 

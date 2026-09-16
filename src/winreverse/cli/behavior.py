@@ -15,6 +15,7 @@ from pathlib import Path
 import typer
 from rich import box
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -80,7 +81,10 @@ def monitor(
     if report["iocs"]:
         console.print("[bold red]IOC:[/bold red]")
         for hit in report["iocs"][:20]:
-            console.print(f"  [{hit['kind']}] {hit['value']}")
+            # 必须 escape：IOC kind 是 url/ip/filepath 一类的裸词，rich 会把
+            # f"[{kind}]" 当样式标签吞掉（真机实测该行只剩值、丢失类型标签）
+            kind = escape(f"[{hit['kind']}]")
+            console.print(f"  [bold]{kind}[/bold] {escape(str(hit['value']))}")
 
     if json_output is not None:
         json_output.parent.mkdir(parents=True, exist_ok=True)
