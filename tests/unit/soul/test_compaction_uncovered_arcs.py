@@ -51,6 +51,27 @@ def test_estimate_message_tokens_tiktoken_error_falls_back_to_heuristic(
     assert _estimate_message_tokens(messages, model="gpt-4o") == estimate_text_tokens(messages)
 
 
+def test_estimate_message_tokens_without_tiktoken_falls_back(monkeypatch: object) -> None:
+    """tiktoken 未安装（ImportError）→ 直接回退启发式估算。"""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "tiktoken", None)  # 使 `import tiktoken` 抛 ImportError
+
+    messages = [_user("hello world"), _user("你好，世界")]
+    assert _estimate_message_tokens(messages, model="gpt-4o") == estimate_text_tokens(messages)
+
+
+def test_snip_compact_zero_token_estimate_returns_unchanged(monkeypatch: object) -> None:
+    """token 估算为 0（空内容消息）→ 原样返回、零释放，不做无意义裁剪。"""
+    messages = [_user("x")]
+    monkeypatch.setattr("winreverse.soul.compaction._estimate_message_tokens", lambda *a, **k: 0)
+
+    out, freed = SnipCompact().compact(messages)
+
+    assert out == messages
+    assert freed == 0
+
+
 def test_prepare_counts_only_user_assistant_for_preserve_budget() -> None:
     """保留预算只数 user/assistant：尾部扫描越过 system 消息继续向前找名额。"""
     compaction = SimpleCompaction(max_preserved_messages=2)
