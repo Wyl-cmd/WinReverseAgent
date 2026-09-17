@@ -27,6 +27,7 @@ Windows Sandbox 增强：见 sandbox_wsb.py（检测到可用时才建议使用�
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 import time
@@ -39,6 +40,8 @@ from typing import Any
 import psutil
 
 from winreverse.core.memanalysis_api import extract_iocs_from_text
+
+logger = logging.getLogger(__name__)
 
 # 会话目录根（相对工作目录）
 _SESSIONS_ROOT = Path("output") / "behavior_sessions"
@@ -339,7 +342,7 @@ def _sample_tree_connections(pids: set[int]) -> set[str]:
 def _launcher_command(sample_path: Path) -> list[str]:
     """按样本类型构造启动命令（脚本类样本经解释器启动）。
 
-    必须用绝对路径：Popen 的 cwd 已切到沙箱副本目录，
+    必须用绝对路径：Popen 的 cwd 是**中立会话目录**（不是沙箱副本目录），
     相对路径会基于新 cwd 解析而失效。
     """
     absolute = str(sample_path.resolve())
@@ -389,6 +392,8 @@ class _Session:
     baseline_registry: dict[str, dict[str, str]] = field(default_factory=dict)
     proc: subprocess.Popen[bytes] | None = None
     sample_pids: set[int] = field(default_factory=set)
+    # destroy 最后一轮仍存活的 pid（rmtree 重试前对这些 pid 再 kill 一次）
+    survivor_pids: set[int] = field(default_factory=set)
     # 样本树进程信息归档（pid → 四要素）：样本退出后仍可重建进程树
     sample_process_info: dict[int, dict[str, Any]] = field(default_factory=dict)
     ran: bool = False
@@ -433,6 +438,12 @@ class ProcessIsolationRunner:
             registry_keys if registry_keys is not None else _default_registry_keys()
         )
         self._poll_interval = poll_interval
+        # destroy 阶段收敛参数：Windows 上进程退出后句柄释放有瞬时延迟，
+        # 必须等待进程真正退出再删除副本，否则会静默残留沙箱目录。
+        self._destroy_wait_timeout = 5.0
+        self._destroy_kill_timeout = 2.0
+        self._destroy_rmtree_retries = 5
+        self._destroy_rmtree_interval = 0.2
         self._sessions: dict[str, _Session] = {}
 
     # ------------------------- SandboxRunner 契约 -------------------------
@@ -462,7 +473,7 @@ class ProcessIsolationRunner:
         isolated_path = sandbox_dir / sample.name
         shutil.copy2(sample, isolated_path)
 
-        watch_dirs = [sandbox_dir, *self._watch_dirs]
+        watch_dirs = [session_dir, *self._watch_dirs]
         baseline_files = {d: _snapshot_dir(d) for d in watch_dirs}
 
         session = _Session(
@@ -501,11 +512,15 @@ class ProcessIsolationRunner:
         duration = max(1, min(int(duration), 3600))
         started = time.monotonic()
 
-        # .bat/.cmd/.ps1 必须经解释器启动，直接 Popen 会静默失败
+        # .bat/.cmd/.ps1 必须经解释器启动，直接 Popen 会静默失败。
+        # cwd 用**中立会话目录**（session_dir），不用沙箱副本目录：
+        # Windows 上进程 cwd 句柄会锁住该目录，destroy 时 rmtree 沙箱副本
+        # 会因句柄未释放而失败残留（2026-09-17 残余风险点 3 收口）。
+        # 样本的相对路径写入落在会话目录（watch_dirs 已含 session_dir，仍被监控）。
         try:
             session.proc = subprocess.Popen(
                 _launcher_command(session.isolated_path),
-                cwd=str(session.isolated_path.parent),
+                cwd=str(session.session_dir),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -565,17 +580,105 @@ class ProcessIsolationRunner:
             BehaviorError: 会话不存在
         """
         session = self._require_session(session_id)
+        self._terminate_sample_tree(session)
+        self._remove_isolated_copy(session)
+        self._sessions.pop(session_id, None)
+
+    def _terminate_sample_tree(self, session: _Session) -> None:
+        """终止样本进程树并等待其真正退出（否则 Windows 上副本文件仍被占用）。"""
+        session.survivor_pids.clear()
+        procs: list[psutil.Process] = []
         for pid in list(session.sample_pids):
             try:
                 proc = psutil.Process(pid)
-                for child in proc.children(recursive=True):
-                    child.terminate()
-                proc.terminate()
+                procs.extend(proc.children(recursive=True))
+                procs.append(proc)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         session.sample_pids.clear()
-        shutil.rmtree(session.isolated_path.parent, ignore_errors=True)
-        self._sessions.pop(session_id, None)
+        if not procs:
+            return
+        # 先礼后兵：terminate -> 等待 -> kill -> 再等待，确保句柄释放
+        for proc in procs:
+            try:
+                proc.terminate()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        _, alive = psutil.wait_procs(procs, timeout=self._destroy_wait_timeout)
+        for proc in alive:
+            try:
+                proc.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        if alive:
+            _, alive = psutil.wait_procs(alive, timeout=self._destroy_kill_timeout)
+        # 残余风险点 1 收口：kill 后仍存活 → 再 kill 一轮并再次等待；
+        # 最后一轮仍存活则登记 survivor_pids 并记日志（不静默放行）。
+        if alive:
+            logger.warning(
+                "destroy: %d 个样本进程在 kill 后仍存活（pid=%s），重新 kill 并再次等待 %.1fs",
+                len(alive),
+                [p.pid for p in alive],
+                self._destroy_kill_timeout,
+            )
+            for proc in alive:
+                try:
+                    proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            _, alive = psutil.wait_procs(alive, timeout=self._destroy_kill_timeout)
+        if alive:
+            session.survivor_pids = {p.pid for p in alive}
+            logger.error(
+                "destroy: %d 个样本进程最终仍存活（pid=%s），沙箱副本可能因文件句柄被占用而删除失败",
+                len(alive),
+                sorted(session.survivor_pids),
+            )
+
+    def _reap_survivors(self, session: _Session) -> None:
+        """rmtree 重试前再 kill 一次仍存活的样本进程（残余风险点 2 收口）。
+
+        若上一次 rmtree 失败的根因是进程未死，单纯 sleep 重试只是空转；
+        每次重试前先重杀一轮，句柄释放后重试才有意义。
+        """
+        if not session.survivor_pids:
+            return
+        still: set[int] = set()
+        for pid in sorted(session.survivor_pids):
+            try:
+                proc = psutil.Process(pid)
+                proc.kill()
+                _, alive = psutil.wait_procs([proc], timeout=self._destroy_kill_timeout)
+                if alive:
+                    still.add(pid)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        logger.warning(
+            "destroy: rmtree 重试前重杀存活进程，剩余 %d 个（pid=%s）",
+            len(still),
+            sorted(still),
+        )
+        session.survivor_pids = still
+
+    def _remove_isolated_copy(self, session: _Session) -> None:
+        """删除沙箱副本（保留行为报告）；短暂重试后仍失败则显式报错，不静默吞掉。"""
+        target = session.isolated_path.parent
+        last_exc: OSError | None = None
+        for attempt in range(self._destroy_rmtree_retries):
+            try:
+                shutil.rmtree(target)
+                return
+            except FileNotFoundError:
+                return
+            except OSError as exc:  # Windows 上句柄释放存在瞬时延迟
+                last_exc = exc
+                if attempt + 1 < self._destroy_rmtree_retries:
+                    # 每次重试前先重杀一轮样本进程树（残余风险点 2 收口）
+                    self._reap_survivors(session)
+                    time.sleep(self._destroy_rmtree_interval * (attempt + 1))
+        raise BehaviorError(
+            f"沙箱副本删除失败（已重试 {self._destroy_rmtree_retries} 次）: {target}: {last_exc}"
+        )
 
     # ------------------------- 内部逻辑 -------------------------
 
