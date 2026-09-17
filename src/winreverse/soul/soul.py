@@ -68,6 +68,8 @@ class WinReverseSoul:
         auto_compact: bool = True,
         compaction_trigger_ratio: float = 0.8,
         on_text_event: Any = None,
+        short_answer_gate: bool = False,
+        min_answer_chars: int = 300,
     ) -> None:
         """初始化 Soul 引擎。
 
@@ -84,6 +86,10 @@ class WinReverseSoul:
             compaction_strategy: 压缩策略（simple / selective / layered）
             auto_compact: 是否启用自动上下文压缩
             compaction_trigger_ratio: 触发比例（token 达窗口上限的该比例时压缩）
+            short_answer_gate: 是否启用短答闸门（P0-4：非截断但无实质内容的答复补一次
+                续写）。默认 False（库级静默，避免额外的 LLM 调用）；应用层（技能/REPL）
+                在 WinReverseApplication 中显式打开
+            min_answer_chars: 短答闸门的最短实质长度（低于此长度且无结构 → 触发续写）
         """
         self._llm = llm
         self._registry = registry
@@ -98,6 +104,10 @@ class WinReverseSoul:
         self._auto_compact = auto_compact
         self._compaction_trigger_ratio = compaction_trigger_ratio
         self._on_text_event = on_text_event
+        self.short_answer_gate = short_answer_gate
+        """短答闸门开关（P0-4）——透传给每次 run 构建的 AgentConfig"""
+        self.min_answer_chars = min_answer_chars
+        """短答闸门最短实质长度（P0-4）"""
 
         # 上下文管理器
         self._context_manager = ContextManager(self._work_dir)
@@ -277,6 +287,8 @@ class WinReverseSoul:
             compaction_strategy=self._compaction_strategy,
             auto_compact=self._auto_compact,
             compaction_trigger_ratio=self._compaction_trigger_ratio,
+            short_answer_gate=self.short_answer_gate,
+            min_answer_chars=self.min_answer_chars,
         )
 
         # 创建并运行 Agent（保留引用供 TUI 轮询上下文状态）

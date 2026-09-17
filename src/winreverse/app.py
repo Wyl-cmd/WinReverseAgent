@@ -187,6 +187,11 @@ class Agent:
             compaction_strategy=effective_config.agent.compaction_strategy,
             auto_compact=effective_config.agent.auto_compact,
             compaction_trigger_ratio=effective_config.agent.compaction_trigger_ratio,
+            # P0-4 短答闸门：应用层（技能/REPL 交付路径）显式打开。
+            # 现象：累计 5/23 ≈ 21.7% 的技能交付是 146–255 字符「引子式答复」
+            # （只有开场句/元话术，无结论与证据）且 rc=0；Agent 库级默认关闭，
+            # 因为启用后每次短答会多消耗一次 LLM 调用。
+            short_answer_gate=True,
         )
 
         # 创建 SkillExecutor

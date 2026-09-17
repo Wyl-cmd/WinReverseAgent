@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -30,6 +31,47 @@ from winreverse.soul.compaction import Compactor
 from winreverse.soul.toolset import SoulToolsetAdapter
 
 logger = logging.getLogger(__name__)
+
+# P0-3① 续写提示词：max_tokens 截断后从中断处继续（不重复已输出内容）
+_CONTINUE_PROMPT = (
+    "上一条回复因输出长度上限被截断（stop_reason=max_tokens）。"
+    "请从中断处继续输出剩余内容，不要重复已输出的部分；"
+    "若内容已完整，请直接给出结论。"
+)
+
+# P0-3② 空答复兜底提示词：不带工具，强制用已有信息给结论
+_SUMMARY_PROMPT = (
+    "你上一条回复没有产生任何可读文本。现在**不要调用任何工具**，"
+    "直接用本次会话中已经拿到的信息（含预置执行流输出/工具返回结果）给出最终结论："
+    "先给结论，再列关键证据（数据、数值、路径），最后写仍不确定的项。"
+    "若确实没有可用数据，就明确写出「未取得数据」及原因。"
+)
+
+# P0-4 短答闸门提示词：不足 min_answer_chars 且无结构的"引子式答复"补一次续写
+_SHORT_ANSWER_PROMPT = (
+    "你上一条回复过短且没有实质内容（只有开场句/元话术，没有结论与证据）。"
+    "现在**不要调用任何工具**，直接用本次会话中已经拿到的信息"
+    "（含预置执行流输出/工具返回结果）补充实质内容："
+    "先给结论，再列关键证据（数据、数值、路径），最后写仍不确定的项。"
+    "不要重复已经输出的开场句；若确实没有可用数据，就明确写出「未取得数据」及原因。"
+)
+
+# 短答闸门的结构判据：列表项（`- ` / `* ` / `1. ` / `1) `）
+_LIST_ITEM_RE = re.compile(r"(?:[-*+•]|\d{1,2}[.)])\s+\S")
+
+# 短答闸门的结构判据：结论/证据类标记词（短文本里出现即视为有实质内容）
+_SUBSTANCE_MARKERS = (
+    "结论",
+    "证据",
+    "摘要",
+    "风险",
+    "建议",
+    "不确定",
+    "未取得数据",
+    "sha256",
+    "md5",
+    "imphash",
+)
 
 
 @dataclass(slots=True)
@@ -63,6 +105,15 @@ class AgentState(str, Enum):
     FAILED = "failed"
 
 
+class EmptyFinalAnswerError(RuntimeError):
+    """最终答复为空且兜底总结调用也拿不到文本（不许静默返回空）。
+
+    2026-09-16（P0-3② 修复）：修复前 ``run()`` 在"末条 assistant 消息是空
+    TextPart"时会静默返回 ``""``，调用方（CLI / Skill 执行器）只看到空白
+    最终答复，误判为"技能没产出"。现在改为抛可读错误，让失败显式暴露。
+    """
+
+
 class AgentConfig(BaseModel):
     """Agent 配置。
 
@@ -77,6 +128,11 @@ class AgentConfig(BaseModel):
         compaction_strategy: 压缩策略（simple / selective / layered）
         auto_compact: 是否启用自动上下文压缩
         compaction_trigger_ratio: 触发比例（token 达窗口上限的该比例时压缩）
+        max_tokens_continuations: stop_reason=max_tokens 时的自动续写次数上限
+        short_answer_gate: 是否启用短答闸门（非截断但无实质内容的答复补一次续写）。
+            默认 False（库级静默）：启用后每次短答会多消耗一次 LLM 调用，
+            由应用层显式打开（WinReverseApplication → WinReverseSoul → AgentConfig）。
+        min_answer_chars: 短答闸门的最短实质长度（低于此长度且无结构 → 触发续写）
     """
 
     name: str
@@ -89,6 +145,9 @@ class AgentConfig(BaseModel):
     compaction_strategy: str = "layered"
     auto_compact: bool = True
     compaction_trigger_ratio: float = 0.8
+    max_tokens_continuations: int = 2
+    short_answer_gate: bool = False
+    min_answer_chars: int = 300
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -167,6 +226,8 @@ class Runtime:
         model: str | None = None,
         tools: list[str] | None = None,
         agent_config: AgentConfig | None = None,
+        *,
+        allow_tools: bool = True,
     ) -> GenerateResult:
         """调用 LLM 生成下一轮回复。
 
@@ -176,6 +237,8 @@ class Runtime:
             model: 模型名（None 用 Runtime 默认）
             tools: 允许的工具名列表（当前未使用，预留）
             agent_config: Agent 配置（当前未使用，预留）
+            allow_tools: 是否把工具集暴露给本次调用（False = 纯文本总结调用，
+                P0-3② 空答复兜底使用）
 
         Returns:
             GenerateResult 包含 LLM 返回的消息和停止原因
@@ -189,7 +252,7 @@ class Runtime:
 
         # 从 toolset 导出 kosong Tool 列表
         kosong_tools = None
-        if self.toolset is not None:
+        if allow_tools and self.toolset is not None:
             kosong_tools = self.toolset.to_kosong_tools()
 
         # 调用 LLM 生成器（兼容 kosong.generate 和 LLM manager 两种接口）
@@ -261,6 +324,14 @@ class Agent:
         """自动压缩触发次数"""
         self.on_assistant_text: Any = None
         """每轮 assistant 文本回调（TUI 实时显示 AI 发言）；签名 fn(text: str)"""
+        self.last_stop_reason: str = ""
+        """最近一轮 LLM 调用的 stop_reason（P0-3 诊断用：区分 max_tokens 截断/正常结束）"""
+        self.answer_fallback_used: bool = False
+        """是否动用了空答复兜底总结调用（P0-3②）"""
+        self.short_answer_retry_used: bool = False
+        """是否动用了短答闸门续写调用（P0-4）"""
+        self._answer_override: str | None = None
+        """max_tokens 续写后的拼接文本（非空时优先作为最终答复，P0-3①）"""
 
     async def _maybe_compact(self) -> None:
         """按需执行上下文压缩（在每次 LLM 调用前调用）。
@@ -331,26 +402,40 @@ class Agent:
     async def run(self, prompt: str) -> str:
         """运行 agent loop。
 
+        返回流程（2026-09-16 P0-3 修复 / 2026-09-17 P0-4 短答闸门）：
+        1. 正常循环：step() → 追加 assistant/工具消息 → 判定是否继续
+        2. ``stop_reason == "max_tokens"``：先带剩余预算**自动续写并拼接**，不再直接结束
+        3. 收尾提取"最后一条含非空文本的 assistant 消息"；若文本过短且无结构
+           （「引子式答复」）则补**一次**短答续写
+        4. 仍为空则做**一次**不带工具的总结兜底调用；再为空则抛
+           ``EmptyFinalAnswerError``（不许静默返回空）
+
         Args:
             prompt: 用户输入
 
         Returns:
-            最后一条 assistant 消息的文本内容
+            最终答复文本（保证非空白；除非一次 LLM 都没调用过，如 max_turns=0）
+
+        Raises:
+            EmptyFinalAnswerError: 跑过 LLM 但拿到空答复且兜底后仍为空
         """
         self.state = AgentState.RUNNING
         self.messages.append(Message(role=MessageRole.USER, content=prompt))
+        self.answer_fallback_used = False
+        self.short_answer_retry_used = False
+        self._answer_override = None
 
         for turn in range(self.config.max_turns):
             self.current_turn = turn
+            self._answer_override = None
             step_result = await self.step()
+            self.last_stop_reason = step_result.stop_reason
 
             self.messages.append(step_result.response)
 
             # 实时推送本轮 assistant 发言（TUI 显示 AI 在说什么）
             if self.on_assistant_text is not None:
-                text = "".join(
-                    str(getattr(part, "text", "")) for part in step_result.response.content
-                )
+                text = self._text_of(step_result.response)
                 if text.strip():
                     try:
                         self.on_assistant_text(text)
@@ -368,27 +453,208 @@ class Agent:
                         )
                     )
 
+            # P0-3①：输出预算耗尽（GLM 等推理模型的推理 token 与正文共享 max_tokens）
+            # → 带剩余预算续写并拼接，而不是把被截断的内容当最终答复直接结束。
+            if step_result.stop_reason == "max_tokens" and not step_result.tool_calls:
+                self._answer_override = await self._continue_after_max_tokens(step_result)
+
             if not self._should_continue(step_result):
                 break
 
         if self.state == AgentState.RUNNING:
             self.state = AgentState.FINISHED
 
-        # 提取最后一条 assistant 消息的文本内容
-        final_content = ""
-        for msg in reversed(self.messages):
-            if msg.role == MessageRole.ASSISTANT and msg.content:
-                if isinstance(msg.content, str):
-                    final_content = msg.content
-                elif isinstance(msg.content, list):
-                    parts: list[str] = []
-                    for part in msg.content:
-                        if hasattr(part, "text"):
-                            parts.append(part.text)
-                    final_content = "\n".join(parts)
-                break
+        # 提取最终答复：跳过空文本部件/纯推理消息，取最后一条含非空 TextPart 的 assistant
+        final_content = self._extract_final_answer()
+
+        # P0-4：短答闸门 —— 非截断但无实质内容的"引子式答复"补一次续写
+        # （现象：5/23 ≈ 21.7% 技能 E2E 交付 146–255 字符开场句并以 rc=0 交付）
+        if (
+            self.config.short_answer_gate
+            and final_content.strip()
+            and not self._is_substantive_answer(final_content)
+            and self.total_usage["steps"] > 0
+        ):
+            final_content = await self._continue_short_answer(final_content)
+
+        # P0-3②：空答复兜底一次（不带工具、明确要求"用已有信息给出结论"）
+        if not final_content.strip() and self.total_usage["steps"] > 0:
+            final_content = await self._empty_answer_fallback()
+
+        if not final_content.strip() and self.total_usage["steps"] > 0:
+            # 不许静默返回空：明确报错（CLI/Skill 执行器会转为 rc≠0 的可见失败）
+            raise EmptyFinalAnswerError(
+                f"最终答复为空：已做 {self.total_usage['steps']} 次 LLM 调用，"
+                f"最后 stop_reason={self.last_stop_reason or 'unknown'}，"
+                f"续写与总结兜底均未取得文本（请检查模型输出预算 / 推理 token 占用）"
+            )
 
         return final_content
+
+    @staticmethod
+    def _text_of(message: Message | None) -> str:
+        """抽取消息文本（兼容 str 内容与多部件 list；跳过无 .text 的部件）。"""
+        if message is None or not message.content:
+            return ""
+        content = message.content
+        if isinstance(content, str):
+            return content
+        parts: list[str] = []
+        for part in content:
+            text = getattr(part, "text", None)
+            if isinstance(text, str) and text:
+                parts.append(text)
+        return "\n".join(parts)
+
+    def _extract_final_answer(self) -> str:
+        """提取最终答复：优先 max_tokens 续写拼接文本，否则最后一条含非空文本的 assistant。
+
+        P0-3 修复点：修复前"取最后一条 assistant 消息"会把空 TextPart 当作最终答复（返回 ""），
+        即使前一轮/前几轮已经有实质内容。现在按"最后一条**含非空文本**"回退查找。
+        """
+        if self._answer_override and self._answer_override.strip():
+            return self._answer_override
+        for msg in reversed(self.messages):
+            if msg.role != MessageRole.ASSISTANT:
+                continue
+            text = self._text_of(msg)
+            if text.strip():
+                return text
+        return ""
+
+    async def _continue_after_max_tokens(self, truncated: StepResult) -> str:
+        """stop_reason=max_tokens 时续写：带剩余预算再次调用并把片段拼接回来。
+
+        Args:
+            truncated: 被截断的那一轮 step 结果
+
+        Returns:
+            拼接后的完整文本（原始片段 + 各次续写片段；都不为空才算成功）
+        """
+        merged = self._text_of(truncated.response)
+        attempts = max(0, int(self.config.max_tokens_continuations))
+        for index in range(attempts):
+            self.messages.append(Message(role=MessageRole.USER, content=_CONTINUE_PROMPT))
+            result = await self._runtime.call_llm(
+                agent_id=self.id,
+                messages=self.messages,
+                model=self.config.model,
+                agent_config=self.config,
+            )
+            self.messages.append(result.message)
+            self.total_usage["steps"] += 1
+            usage = result.usage
+            if usage is not None:
+                self.total_usage["input"] += int(
+                    getattr(usage, "input", None) or getattr(usage, "input_tokens", 0) or 0
+                )
+                self.total_usage["output"] += int(
+                    getattr(usage, "output", None) or getattr(usage, "output_tokens", 0) or 0
+                )
+            chunk = self._text_of(result.message)
+            if not chunk.strip():
+                break
+            merged = f"{merged}{chunk}" if merged else chunk
+            logger.info(
+                "[MAX_TOKENS] 续写第 %d 次成功拼接 %d 字符（stop_reason=%s）",
+                index + 1,
+                len(chunk),
+                result.stop_reason,
+            )
+            if result.stop_reason != "max_tokens":
+                break
+        return merged
+
+    async def _empty_answer_fallback(self) -> str:
+        """空答复兜底：一次不带工具的"用已有信息给出结论"总结调用（P0-3②）。"""
+        self.answer_fallback_used = True
+        self.messages.append(Message(role=MessageRole.USER, content=_SUMMARY_PROMPT))
+        try:
+            result = await self._runtime.call_llm(
+                agent_id=self.id,
+                messages=self.messages,
+                model=self.config.model,
+                agent_config=self.config,
+                allow_tools=False,
+            )
+        except Exception:
+            logger.exception("空答复兜底总结调用失败")
+            return ""
+        self.messages.append(result.message)
+        self.total_usage["steps"] += 1
+        self.last_stop_reason = result.stop_reason
+        return self._text_of(result.message)
+
+    def _is_substantive_answer(self, text: str) -> bool:
+        """短答闸门判据：答复是否"有实质内容"（P0-4）。
+
+        判据 = 长度达标 **或** 结构命中：
+        1. ``len(strip) >= config.min_answer_chars`` → 视为实质；
+        2. 含代码块（```）/ 列表项 / 结论·证据类标记词 → 视为实质。
+
+        两者皆不满足 = 「引子式答复」（只有开场句/元话术），需要补一次续写。
+
+        Args:
+            text: 待判定答复文本
+
+        Returns:
+            True 表示有实质内容（放行），False 表示属短答（触发一次续写）
+        """
+        stripped = text.strip()
+        if not stripped:
+            return False
+        if len(stripped) >= max(0, int(self.config.min_answer_chars)):
+            return True
+        if "```" in stripped:
+            return True
+        if any(_LIST_ITEM_RE.search(line) for line in stripped.splitlines()):
+            return True
+        return any(marker in stripped for marker in _SUBSTANCE_MARKERS)
+
+    async def _continue_short_answer(self, short_text: str) -> str:
+        """短答闸门续写：对「非截断但无实质内容」的答复补一次总结调用（P0-4）。
+
+        只重试一次（不循环），且不带工具；续写仍为空则返回 ``""``，
+        由 ``run()`` 既有的空答复兜底路径接管（再空则抛 EmptyFinalAnswerError）。
+
+        Args:
+            short_text: 上一轮的短答复文本（作为兜底保留项）
+
+        Returns:
+            续写文本；续写取不到文本时返回 ""（交给空答复兜底）
+        """
+        self.short_answer_retry_used = True
+        self.messages.append(Message(role=MessageRole.USER, content=_SHORT_ANSWER_PROMPT))
+        try:
+            result = await self._runtime.call_llm(
+                agent_id=self.id,
+                messages=self.messages,
+                model=self.config.model,
+                agent_config=self.config,
+                allow_tools=False,
+            )
+        except Exception:
+            logger.exception("短答闸门续写调用失败，保留原答复（%d 字符）", len(short_text.strip()))
+            return short_text
+        self.messages.append(result.message)
+        self.total_usage["steps"] += 1
+        self.last_stop_reason = result.stop_reason
+        continuation = self._text_of(result.message)
+        if not continuation.strip():
+            logger.warning(
+                "短答闸门：续写未取得文本（原答复 %d 字符），转入空答复兜底",
+                len(short_text.strip()),
+            )
+            return ""
+        if self._is_substantive_answer(continuation):
+            logger.info("短答闸门：续写取得实质答复 %d 字符", len(continuation.strip()))
+            return continuation
+        logger.warning(
+            "短答闸门：续写仍为短答复（%d 字符 < 阈值 %d），保留较长的一条（不循环重试）",
+            len(continuation.strip()),
+            self.config.min_answer_chars,
+        )
+        return continuation if len(continuation.strip()) > len(short_text.strip()) else short_text
 
     async def step(self) -> StepResult:
         """执行单步：上下文压缩（按需）→ 调用 LLM → 处理工具调用。"""
