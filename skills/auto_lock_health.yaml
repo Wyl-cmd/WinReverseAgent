@@ -15,11 +15,22 @@ parameters:
     default: 999
     description: "锁定的血量数值"
     required: false
+  - name: "address"
+    type: "int"
+    default: 0
+    description: "血量地址（十进制；扫描定位后填入，预置流用它做读写）"
+    required: false
+  - name: "length"
+    type: "int"
+    default: 4
+    description: "读取长度（字节，type=bytes 时必填）"
+    required: false
 
 prompt_template: |
   任务：锁定游戏血量。
   目标进程：{{process_name}}
   锁定数值：{{lock_value}}
+  当前血量地址：{{address}}（0 = 尚未定位，需按下面步骤扫描）
 
   执行步骤：
   1. 使用 memory.attach 附加进程 {{process_name}}，获取 pid。
@@ -32,14 +43,24 @@ prompt_template: |
   - 附加进程需要管理员权限。
   - 锁定循环间隔建议 100ms，避免占用过多 CPU。
   - 若扫描无结果，提示用户检查进程名或血量数值是否正确。
+  - memory.read/memory.write 只支持按地址读写（pid/address/length），
+    "扫描"是 LLM 在循环里反复读取+比对来完成的。
 
 execution_flow:
+  # 2026-09-16 P0-2 修复：参数名对齐工具签名（memory.read/write 要 pid/address/length），
+  # 且 pid 由 memory.attach 的输出自动接线（{{pid}}）——修复前两个步骤都缺必填参数。
   - action: "memory.attach"
     args:
       process_name: "{{process_name}}"
   - action: "memory.read"
     args:
+      pid: "{{pid}}"
+      address: "{{address}}"
+      length: "{{length}}"
       type: "int"
   - action: "memory.write"
     args:
+      pid: "{{pid}}"
+      address: "{{address}}"
+      type: "int"
       value: "{{lock_value}}"

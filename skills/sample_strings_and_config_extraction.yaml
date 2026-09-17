@@ -39,10 +39,12 @@ prompt_template: |
   - 提取到的真实 C2 域名/IP **不要主动访问**。
 
 execution_flow:
+  # 2026-09-16 P0-2 修复：参数名对齐工具签名——memory.strings / memory.iocs 要 path
+  # （min_length），修复前这里传 file_path/min_len → flow 两步全 KeyError（实测复现）。
   - action: "memory.strings"
     args:
-      file_path: "{{file_path}}"
-      min_len: "{{min_len}}"
+      path: "{{file_path}}"
+      min_length: "{{min_len}}"
   - action: "memory.iocs"
     args:
-      file_path: "{{file_path}}"
+      path: "{{file_path}}"

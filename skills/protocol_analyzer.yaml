@@ -10,39 +10,53 @@ parameters:
     default: "game.exe"
     description: "目标进程名"
     required: true
-  - name: "port"
-    type: "int"
-    default: 0
-    description: "目标端口（0 表示捕获所有端口）"
+  - name: "capture_filter"
+    type: "string"
+    default: ""
+    description: "BPF 捕获过滤（如 'tcp port 443'；空 = 全量）"
     required: false
   - name: "duration"
     type: "int"
     default: 30
     description: "抓包时长（秒）"
     required: false
+  - name: "output_pcap"
+    type: "string"
+    default: "output/capture.pcap"
+    description: "抓包落盘路径（net.live_capture 的 output_pcap）"
+    required: false
 
 prompt_template: |
   任务：分析 {{process_name}} 的网络协议。
-  目标端口：{{port}}（0 表示全部）
+  捕获过滤：{{capture_filter}}（空表示全部）
   抓包时长：{{duration}} 秒
 
   执行步骤：
   1. 使用 memory.attach 附加进程 {{process_name}}，确认进程存活。
-  2. 调用外部工具 tshark 抓包 {{duration}} 秒，过滤端口 {{port}}。
+  2. 用 net.live_capture 抓包 {{duration}} 秒（output_pcap={{output_pcap}}，
+     capture_filter={{capture_filter}}），落盘后用 net.read_pcap 解析。
   3. 解析抓包结果，提取协议类型（TCP/UDP）、封包长度分布、关键字段。
   4. 识别加密流量特征（如固定头字节、心跳包间隔）。
   5. 输出协议分析报告：协议族、封包结构、可能的加密算法。
 
   注意事项：
   - 抓包需要管理员权限。
-  - 端口 0 表示捕获所有流量，数据量较大时建议缩小范围。
+  - 全量捕获数据量大，建议用 capture_filter 缩小范围（例如 'tcp port 443'）。
   - 加密流量只能识别特征，无法解密内容。
 
 execution_flow:
+  # 2026-09-16 P0-2 修复：net.read_pcap 要 pcap_path（不是 duration/port），
+  # 抓包要用 net.live_capture + output_pcap；{{pcap}} 由 live_capture 输出接线。
   - action: "memory.attach"
     args:
       process_name: "{{process_name}}"
+  - action: "net.interfaces"
+    args: {}
+  - action: "net.live_capture"
+    args:
+      output_pcap: "{{output_pcap}}"
+      duration_seconds: "{{duration}}"
+      capture_filter: "{{capture_filter}}"
   - action: "net.read_pcap"
     args:
-      duration: "{{duration}}"
-      port: "{{port}}"
+      pcap_path: "{{pcap}}"

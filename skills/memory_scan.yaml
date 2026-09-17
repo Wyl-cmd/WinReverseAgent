@@ -11,12 +11,22 @@ parameters:
     required: true
   - name: "pattern"
     type: "string"
-    description: "搜索模式（pymem 支持的格式，如 'XX XX ?? XX' 或字节序列）"
+    description: "搜索模式（如 'XX XX ?? XX'；当前内置工具不含模式扫描，pattern 由 LLM 用 shell/外部工具或逐地址读取实现）"
     required: true
   - name: "return_multiple"
     type: "bool"
     default: false
     description: "是否返回所有匹配地址（false 仅返回首个）"
+    required: false
+  - name: "address"
+    type: "int"
+    default: 0
+    description: "预置流读取的起始地址（十进制）"
+    required: false
+  - name: "length"
+    type: "int"
+    default: 64
+    description: "预置流读取长度（字节）"
     required: false
 
 prompt_template: |
@@ -39,10 +49,14 @@ prompt_template: |
   - 附加进程需要管理员权限。
 
 execution_flow:
+  # 2026-09-16 P0-2 修复：memory.read 没有 pattern 参数（传 pattern 是参数名错配），
+  # 预置流改为"attach → 按地址读取"；pid 由 attach 输出接线，地址/长度来自技能参数。
   - action: "memory.attach"
     args:
       process_name: "{{process_name}}"
   - action: "memory.read"
     args:
-      pattern: "{{pattern}}"
-      return_multiple: "{{return_multiple}}"
+      pid: "{{pid}}"
+      address: "{{address}}"
+      length: "{{length}}"
+      type: "bytes"

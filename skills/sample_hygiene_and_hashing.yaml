@@ -23,8 +23,10 @@ prompt_template: |
   步骤：
   1. **真实类型**：不信任扩展名。用 fs.read_file（读头部魔数）与 die.scan_file（类型/编译器）交叉判定，
      指出「扩展名与实际类型是否一致」（不一致是伪装迹象，必须写进报告）。
-  2. **指纹**：shell.run 计算 `certutil -hashfile "{{file_path}}" SHA256`（Windows 原生可用）、
-     以及 MD5/SHA1；PE 另取 pe.meta 的 imphash（家族聚类用）。
+  2. **指纹**：优先用内置只读工具 file.hash（algorithm=all 一次拿 sha256/sha1/md5，
+     2026-09-16 新增）；再用 shell.run 跑 `certutil -hashfile "{{file_path}}" SHA256`
+     做第二来源交叉核对（Windows 原生可用）；
+     PE 另取 pe.meta 的 imphash（家族聚类用）。
   3. **规范命名**：建议 `<sha256前8位>_<家族或unknown>_<真实类型>.<ext>`。
   4. **归档（仅当 vault_dir 非空）**：按哈希前两位建子目录存放，**若为可执行样本应压缩为带口令的归档**
      （约定口令在报告里写明，不要写进文件名），并生成 `manifest.csv`（sha256,原始文件名,来源,时间,分析人）。
@@ -35,8 +37,15 @@ prompt_template: |
   注意事项：
   - 任何写操作前先确认不在证据原始目录内操作（先复制再处理）。
   - 不要为了"看清楚"而改扩展名后双击；不要上传到公共平台（除非已脱敏且获授权）。
+  - 哈希必须给出算法与完整 64/40/32 位十六进制值，不要只给前 8 位。
 
 execution_flow:
+  # 2026-09-16：新增 file.hash（P1-5）+ 修正 shell.run 步骤（P1-4：带引号路径此前被
+  # cmd.exe 误解析成伪 FILE_NOT_FOUND；现在由临时 .bat 承载原命令）
+  - action: "file.hash"
+    args:
+      path: "{{file_path}}"
+      algorithm: "all"
   - action: "die.scan_file"
     args:
       file_path: "{{file_path}}"

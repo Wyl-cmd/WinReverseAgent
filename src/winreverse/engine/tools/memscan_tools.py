@@ -161,7 +161,7 @@ class MemoryStringsTool(BaseTool):
     """memory.strings — 从转储文件提取字符串。
 
     输入: {
-        "path": "out/dump/region_0000_xxx.bin",
+        "path": "out/dump/region_0000_xxx.bin",  # 转储文件路径（memory.dump 产物或任意内存镜像）
         "min_length": 5,     # 可选
         "limit": 50          # 可选：返回条数上限
     }
@@ -189,7 +189,7 @@ class MemoryIocsTool(BaseTool):
     """memory.iocs — 从转储文件提取 IOC。
 
     输入: {
-        "path": "out/dump/region_0000_xxx.bin",
+        "path": "out/dump/region_0000_xxx.bin",  # 转储文件路径
         "min_length": 5,    # 可选：字符串最小长度
         "limit": 100        # 可选：返回条数上限
     }
@@ -223,7 +223,7 @@ class MemoryCarvePeTool(BaseTool):
     """memory.carve_pe — 从转储文件雕刻 PE。
 
     输入: {
-        "path": "out/dump/region_0000_xxx.bin",
+        "path": "out/dump/region_0000_xxx.bin",  # 转储文件路径
         "output_dir": "out/carved",  # 可选：落盘目录（不传则仅报告不落盘）
         "max_count": 16              # 可选
     }
@@ -276,7 +276,10 @@ class MemoryAnalyzeTool(BaseTool):
 
     def _run(self, input_data: dict[str, Any]) -> dict[str, Any]:
         dump_dir = self._require(input_data, "dump_dir")
-        rules_path = input_data.get("rules_path")
+        rules_raw = input_data.get("rules_path")
+        # 空字符串按"未提供"处理（2026-09-16：技能 YAML 里 rules_path 默认 ""，
+        # 直接透传会让 compile_file("") 报错，把"没有规则"变成"分析失败"）
+        rules_path = str(rules_raw) if rules_raw else None
         top_strings = int(input_data.get("top_strings", 20))
         carve = bool(input_data.get("carve", True))
 

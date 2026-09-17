@@ -13,7 +13,17 @@ parameters:
   - name: "pid"
     type: "int"
     default: 0
-    description: "目标 PID（0 = 全镜像扫描）"
+    description: "活体目标 PID（memory.regions / memory.dump 需要；0 = 未附加）"
+    required: false
+  - name: "dump_dir"
+    type: "string"
+    default: ""
+    description: "已落盘的内存转储目录（含 manifest.json；memory.analyze 需要）"
+    required: false
+  - name: "max_carve"
+    type: "int"
+    default: 16
+    description: "memory.carve_pe 单次最多雕刻的 PE 数量"
     required: false
 
 prompt_template: |
@@ -41,14 +51,16 @@ prompt_template: |
   - 本技能只读内存镜像，不触碰活体进程（除显式只读转储）。
 
 execution_flow:
+  # 2026-09-16 P0-2 修复：参数名对齐工具签名——
+  #   memory.regions 要 pid（不是 file_path）；memory.analyze 要 dump_dir（不是 file_path）；
+  #   memory.carve_pe 要 path。修复前这三步的参数名全部对不上，flow 必然报错。
   - action: "memory.regions"
     args:
-      file_path: "{{file_path}}"
       pid: "{{pid}}"
   - action: "memory.analyze"
     args:
-      file_path: "{{file_path}}"
+      dump_dir: "{{dump_dir}}"
   - action: "memory.carve_pe"
     args:
-      file_path: "{{file_path}}"
-      pid: "{{pid}}"
+      path: "{{file_path}}"
+      max_count: "{{max_carve}}"

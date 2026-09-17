@@ -10,6 +10,11 @@ parameters:
     type: "string"
     description: "证据输出目录"
     required: true
+  - name: "pid"
+    type: "int"
+    default: 0
+    description: "内存转储目标 PID（memory.dump 需要；0 = 未指定，将只跑其余步骤）"
+    required: false
   - name: "include_memory"
     type: "bool"
     default: true
@@ -43,8 +48,10 @@ prompt_template: |
   - 命令输出务必原样留存，不要人工"整理"后再存。
 
 execution_flow:
+  # 2026-09-16 P0-2 修复：memory.dump 要 pid（修复前只传 output_dir → 必填参数缺失）
   - action: "memory.dump"
     args:
+      pid: "{{pid}}"
       output_dir: "{{output_dir}}"
   - action: "net.interfaces"
     args: {}
