@@ -26,6 +26,7 @@ from typing import Any
 
 from kosong.types import Tool, ToolParameter
 from winreverse.engine.bus import ToolInterface, ToolNotFoundError, ToolRegistry
+from winreverse.soul.tool_schema import tool_parameters
 
 # 事件回调类型：接收一个事件字典，无返回值
 ToolEventCallback = Callable[[dict[str, Any]], None]
@@ -97,8 +98,9 @@ class SoulToolsetAdapter:
     def to_kosong_tools(self) -> list[Tool]:
         """转换为 kosong Tool 列表，供 LLM generate() 调用。
 
-        注意：当前 ToolInterface 未定义参数 schema，这里使用空参数列表。
-        未来可在 ToolInterface 中扩展 parameters 字段。
+        2026-09-16（P0-1 修复）：每个工具都会带出真实参数 schema
+        （显式声明优先，否则由 ``soul/tool_schema.py`` 从 ``_run`` 源码推断）。
+        修复前此处恒为空参数列表 → LLM 无法传参（arguments 恒为 ``{}``）。
         """
         kosong_tools: list[Tool] = []
         for tool in self.list_tools():
@@ -114,18 +116,26 @@ class SoulToolsetAdapter:
     def _infer_parameters(self, tool: ToolInterface) -> list[ToolParameter]:
         """推断工具参数列表。
 
-        当前实现返回空列表（ToolInterface 未定义参数 schema）。
-        未来若 ToolInterface 扩展 parameters 字段，可在此处转换。
+        优先级：
+        1. 工具显式声明的 ``parameters``（ToolParameterSpec / dict / 元组）
+        2. 从 ``_run`` 源码推断（``_require(input_data, ...)`` / ``input_data[...]`` /
+           ``input_data.get(...)``，含类型与必填判定）
 
         Args:
             tool: 工具实例
 
         Returns:
-            kosong ToolParameter 列表
+            kosong ToolParameter 列表（无法解析时为 []，调用行为不变）
         """
-        # 预留：未来 ToolInterface 扩展后从 tool.parameters 转换
-        _ = tool
-        return []
+        return [
+            ToolParameter(
+                name=spec.name,
+                type=spec.type,
+                description=spec.description or None,
+                required=spec.required,
+            )
+            for spec in tool_parameters(tool)
+        ]
 
     def _emit_event(self, event: dict[str, Any]) -> None:
         """安全触发事件回调（异常不中断主流程）。"""

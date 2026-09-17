@@ -18,9 +18,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from winreverse.core import memory_api
+from winreverse.engine.bus import ToolParameterSpec
 from winreverse.engine.tools._base import BaseTool
 
 # 进程会话表：pid -> Pymem 实例
@@ -95,6 +96,23 @@ class MemoryReadTool(BaseTool):
     name = "memory.read"
     description = "读取目标进程的内存数据（需先用 memory.attach 附加）"
 
+    # 显式声明参数 schema（P0-1）：length 只在 type=bytes 时必须，
+    # 单靠源码推断会把它当成无条件必填，误导 LLM 传无用参数。
+    parameters: ClassVar[list[ToolParameterSpec]] = [
+        ToolParameterSpec("pid", "integer", "memory.attach 返回的进程 ID", True),
+        ToolParameterSpec("address", "integer", "起始地址（十进制）", True),
+        ToolParameterSpec(
+            "type", "string", "读取类型：bytes/int/string（默认 bytes）", False, "bytes"
+        ),
+        ToolParameterSpec("length", "integer", "读取长度（字节，type=bytes 时必填）", False, 16),
+        ToolParameterSpec(
+            "max_len", "integer", "最大长度（type=string 时使用，默认 50）", False, 50
+        ),
+        ToolParameterSpec(
+            "encoding", "string", "字符串编码（type=string 时使用，默认 UTF-8）", False, "UTF-8"
+        ),
+    ]
+
     def _run(self, input_data: dict[str, Any]) -> dict[str, Any]:
         import base64
 
@@ -144,6 +162,22 @@ class MemoryWriteTool(BaseTool):
 
     name = "memory.write"
     description = "向目标进程内存写入数据（需先用 memory.attach 附加）"
+
+    # 显式声明参数 schema（P0-1）：data/value/string 由 type 判别式决定，
+    # 源码推断会把三者都当必填。
+    parameters: ClassVar[list[ToolParameterSpec]] = [
+        ToolParameterSpec("pid", "integer", "memory.attach 返回的进程 ID", True),
+        ToolParameterSpec("address", "integer", "目标地址（十进制）", True),
+        ToolParameterSpec(
+            "type", "string", "写入类型：bytes/int/string（默认 bytes）", False, "bytes"
+        ),
+        ToolParameterSpec("data", "string", "base64 数据（type=bytes 时使用）", False),
+        ToolParameterSpec("value", "integer", "整数值（type=int 时使用）", False),
+        ToolParameterSpec("string", "string", "字符串值（type=string 时使用）", False),
+        ToolParameterSpec(
+            "encoding", "string", "字符串编码（type=string 时使用，默认 UTF-8）", False, "UTF-8"
+        ),
+    ]
 
     def _run(self, input_data: dict[str, Any]) -> dict[str, Any]:
         import base64

@@ -21,12 +21,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from winreverse.skill.loader import Skill, SkillNotFoundError, SkillRegistry
 from winreverse.soul.soul import WinReverseSoul
+from winreverse.soul.tool_schema import WIREABLE_OUTPUT_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -226,15 +228,22 @@ class SkillExecutor:
     ) -> list[FlowStepResult]:
         """执行 Skill 的预置 execution_flow。
 
+        2026-09-16（P0-2 配套修复）：上游工具输出里"可接线"的键
+        （``pid`` / ``output_dir`` / ``dump_dir`` / ``pcap`` …，见
+        ``soul.tool_schema.WIREABLE_OUTPUT_KEYS``）会提供给后续步骤的
+        ``{{占位符}}`` 使用——修复前 ``{{pid}}`` 这类占位符永远渲染成字面量
+        ``"{{pid}}"``，凡是"先 attach/dump 再引用结果"的技能必然在运行期失败。
+
         Args:
             skill: Skill 实例
-            variables: 渲染变量
+            variables: 渲染变量（本方法内做副本，不污染调用方）
 
         Returns:
             每步执行结果列表
         """
         results: list[FlowStepResult] = []
         toolset = self._soul.toolset
+        variables = dict(variables)
 
         for idx, step in enumerate(skill.execution_flow):
             action = step.get("action", "")
@@ -269,6 +278,9 @@ class SkillExecutor:
                         is_error=tool_result.is_error,
                     )
                 )
+                # P0-2 配套：把上游输出里可接线的键（pid/output_dir/dump_dir/pcap…）
+                # 提供给后续步骤的 {{占位符}}
+                self._wire_flow_outputs(variables, tool_result.output)
             except Exception as exc:
                 # 单步失败不中断整体流程，记录错误继续后续步骤
                 logger.exception(
@@ -287,6 +299,30 @@ class SkillExecutor:
                 )
 
         return results
+
+    @staticmethod
+    def _wire_flow_outputs(variables: dict[str, Any], output: str) -> None:
+        """把上游工具输出中"可接线"的键注入渲染变量（供后续步骤 {{占位符}} 使用）。
+
+        只处理 ``WIREABLE_OUTPUT_KEYS`` 里的标量键，且不覆盖已有非空值；
+        输出不是 JSON 对象时静默跳过（单步失败不影响流程）。
+
+        Args:
+            variables: 渲染变量（就地更新）
+            output: 上游工具输出字符串（SoulToolsetAdapter 序列化后的 JSON）
+        """
+        try:
+            payload = json.loads(output)
+        except (TypeError, ValueError):
+            return
+        if not isinstance(payload, dict):
+            return
+        for key in WIREABLE_OUTPUT_KEYS:
+            value = payload.get(key)
+            if value is None or value == "" or isinstance(value, (dict, list)):
+                continue
+            if key not in variables or variables[key] in (None, ""):
+                variables[key] = value
 
     @staticmethod
     def _render_args(

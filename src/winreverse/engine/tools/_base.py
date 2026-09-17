@@ -14,7 +14,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
+
+from winreverse.engine.bus import ToolParameterSpec
 
 
 class BaseTool:
@@ -27,10 +29,13 @@ class BaseTool:
     Attributes:
         name: 工具唯一标识（点分命名空间，如 'pe.parse'、'memory.attach'）
         description: 工具用途说明，供 LLM 理解与调用
+        parameters: 可选的入参 schema 声明（显式优先；未声明时由
+            winreverse.soul.tool_schema.infer_parameters 从 _run 源码推断）
     """
 
     name: str = ""
     description: str = ""
+    parameters: ClassVar[list[ToolParameterSpec]] = []
 
     def execute(self, input_data: dict[str, Any]) -> dict[str, Any]:
         """执行工具（ToolInterface 契约入口）。
