@@ -1,6 +1,6 @@
 """winreverse.engine.tools — 内部工具聚合与注册入口。
 
-汇总各工具模块的 TOOLS 列表为 ALL_TOOLS（共 47 个），并提供：
+汇总各工具模块的 TOOLS 列表为 ALL_TOOLS（共 48 个），并提供：
 - count_tools(): 工具总数
 - list_tool_names(): 全部工具名
 - register_all_tools(registry): 一次性注册到 ToolRegistry
@@ -27,8 +27,9 @@ from winreverse.engine.tools.pe_tools import PE_TOOLS
 from winreverse.engine.tools.shell_tools import SHELL_TOOLS
 from winreverse.engine.tools.yara_tools import YARA_TOOLS
 
-# 全量工具清单：android13 + behavior3 + die2 + disasm1 + fs5 + memory3
-#             + memscan7 + net4 + pe6 + shell1 + yara2 = 47
+# 全量工具清单：android13 + behavior3 + die2 + disasm1 + fs6 + memory3
+#             + memscan7 + net4 + pe6 + shell1 + yara2 = 48
+# （fs6 = fs.read_file/write_file/edit_file/list_dir/search + file.hash[2026-09-16 P1-5]）
 ALL_TOOLS: list[BaseTool] = [
     *ANDROID_TOOLS,
     *BEHAVIOR_TOOLS,

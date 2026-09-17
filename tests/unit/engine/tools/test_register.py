@@ -20,8 +20,8 @@ class TestCountTools:
     """count_tools 函数测试。"""
 
     def test_returns_21(self) -> None:
-        """共 47 个工具（领域41+文件5+shell1）。"""
-        assert count_tools() == 47
+        """共 48 个工具（领域41+文件6+shell1；2026-09-16 新增 file.hash）。"""
+        assert count_tools() == 48
 
     def test_matches_all_tools_length(self) -> None:
         """count_tools 与 ALL_TOOLS 长度一致。"""
@@ -34,7 +34,7 @@ class TestListToolNames:
     def test_returns_all_names(self) -> None:
         """返回所有工具名。"""
         names = list_tool_names()
-        assert len(names) == 47
+        assert len(names) == 48
         assert "pe.parse" in names
         assert "disasm" in names
         assert "yara.scan_file" in names
@@ -49,6 +49,7 @@ class TestListToolNames:
         assert "net.live_capture" in names
         assert "behavior.monitor" in names
         assert "fs.read_file" in names
+        assert "file.hash" in names
         assert "shell.run" in names
 
 
@@ -56,10 +57,10 @@ class TestRegisterAllTools:
     """register_all_tools 函数测试。"""
 
     def test_registers_all_tools(self) -> None:
-        """应注册全部 47 个工具到 registry。"""
+        """应注册全部 48 个工具到 registry。"""
         registry = ToolRegistry()
         register_all_tools(registry)
-        assert len(registry) == 47
+        assert len(registry) == 48
 
     def test_registered_tools_are_callable(self) -> None:
         """注册的工具应可通过 registry.call 调用。"""
@@ -100,7 +101,7 @@ class TestRegisterAllTools:
         register_all_tools(registry)
 
         tools = registry.list_tools()
-        assert len(tools) == 47
+        assert len(tools) == 48
         for tool in tools:
             assert "name" in tool
             assert "description" in tool

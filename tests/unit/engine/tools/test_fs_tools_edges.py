@@ -172,13 +172,14 @@ class TestSearchEdges:
 
 
 def test_fs_tools_registry() -> None:
-    """FS_TOOLS 注册表：五个工具、命名空间唯一、描述非空。"""
+    """FS_TOOLS 注册表：六个工具、命名空间唯一、描述非空。"""
     assert [t.name for t in FS_TOOLS] == [
         "fs.read_file",
         "fs.write_file",
         "fs.edit_file",
         "fs.list_dir",
         "fs.search",
+        "file.hash",
     ]
     assert all(t.description for t in FS_TOOLS)
     assert len({t.name for t in FS_TOOLS}) == len(FS_TOOLS)

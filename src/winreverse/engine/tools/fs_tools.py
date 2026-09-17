@@ -6,6 +6,7 @@
 - fs.edit_file: 精确字符串替换（唯一匹配校验，代码修改的标准方式）
 - fs.list_dir: 列目录（名称/大小/类型，递归可选）
 - fs.search: 文件名 glob + 内容正则搜索（限结果数）
+- file.hash: 文件哈希（sha256/sha1/md5，P1-5 新增，只读、流式分块）
 
 安全边界：单文件读写上限 10MB；读取疑似二进制时返回十六进制预览
 而非整块解码，防止撑爆 LLM 上下文。
@@ -14,6 +15,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import re
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,10 @@ _READ_TRUNCATE = 256 * 1024
 _BINARY_PROBE = 8 * 1024
 # 目录/搜索结果上限
 _MAX_ITEMS = 500
+# 支持的哈希算法（file.hash）
+_HASH_ALGORITHMS: tuple[str, ...] = ("sha256", "sha1", "md5")
+# 流式读取块大小（字节）
+_HASH_CHUNK = 1024 * 1024
 
 
 def _resolve(path_str: str) -> Path:
@@ -240,6 +246,67 @@ class FsSearchTool(BaseTool):
         }
 
 
+class FileHashTool(BaseTool):
+    """file.hash — 计算文件哈希（只读，P1-5 新增）。
+
+    输入: {
+        "path": "C:\\work\\samples\\keylogger.exe",
+        "algorithm": "sha256"   # 可选：sha256/sha1/md5/all（默认 sha256）
+    }
+    输出: {
+        "path": str,
+        "size": int,             # 读入字节数（同时作为证据大小核对）
+        "algorithm": str,
+        "hashes": {"sha256": "...", "sha1": "...", "md5": "..."}
+    }
+
+    说明：分块流式读取（默认 1MB/块），不把整个样本读进内存；
+    Windows / Linux 行为一致（纯 hashlib，不依赖 certutil 或 Get-FileHash）。
+    """
+
+    name = "file.hash"
+    description = (
+        "计算文件哈希（sha256/sha1/md5，默认 sha256，algorithm=all 一次算三种）："
+        "只读、分块流式读取、跨平台一致；用于样本指纹、证据完整性核验与去重"
+    )
+
+    def _run(self, input_data: dict[str, Any]) -> dict[str, Any]:
+        path = _resolve(str(self._require(input_data, "path")))
+        algorithm = str(input_data.get("algorithm", "sha256")).strip().lower() or "sha256"
+        chunk_size = int(input_data.get("chunk_size", _HASH_CHUNK))
+
+        if algorithm == "all":
+            algorithms: tuple[str, ...] = _HASH_ALGORITHMS
+        elif algorithm in _HASH_ALGORITHMS:
+            algorithms = (algorithm,)
+        else:
+            raise ValueError(
+                f"不支持的哈希算法: {algorithm}（可选: {'/'.join(_HASH_ALGORITHMS)}/all）"
+            )
+        if chunk_size <= 0:
+            raise ValueError(f"chunk_size 必须为正整数，得到 {chunk_size}")
+        if not path.is_file():
+            raise FileNotFoundError(f"文件不存在: {path}")
+
+        digesters = {name: hashlib.new(name) for name in algorithms}
+        size = 0
+        with path.open("rb") as handle:
+            while True:
+                chunk = handle.read(chunk_size)
+                if not chunk:
+                    break
+                size += len(chunk)
+                for digester in digesters.values():
+                    digester.update(chunk)
+
+        return {
+            "path": str(path),
+            "size": size,
+            "algorithm": algorithm,
+            "hashes": {name: digester.hexdigest() for name, digester in digesters.items()},
+        }
+
+
 # 工具实例列表
 FS_TOOLS: list[BaseTool] = [
     FsReadFileTool(),
@@ -247,4 +314,5 @@ FS_TOOLS: list[BaseTool] = [
     FsEditFileTool(),
     FsListDirTool(),
     FsSearchTool(),
+    FileHashTool(),
 ]

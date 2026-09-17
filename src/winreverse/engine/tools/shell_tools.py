@@ -2,6 +2,8 @@
 
 让 LLM 具备执行任意命令的能力（逆向工作的核心基础设施）：
 - shell.run: 执行 cmd / powershell 命令（超时、输出截断、返回码）
+  · cmd 分支：命令含内嵌双引号时落临时 .bat 执行（P1-4 修复，避免 list2cmdline
+    的 \" 转义被 cmd.exe 误解析 → 带引号路径被破坏成伪 FILE_NOT_FOUND）
 
 安全守卫（对齐 config.agent.yolo 配置语义）：
 - 默认拦截破坏性命令模式（format / rd /s / del /f / shutdown / reg add HKLM /
@@ -15,6 +17,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -50,8 +53,53 @@ _DANGEROUS_PATTERNS: tuple[str, ...] = (
 )
 
 
+def _needs_cmd_script(command: str) -> bool:
+    """命令是否需要经临时 .bat 执行（含内嵌双引号 → 会被 list2cmdline 破坏）。"""
+    return '"' in command
+
+
+def _script_encoding() -> str:
+    """批处理文件编码：Windows 用 mbcs（=cmd.exe 当前 ANSI 代码页），其他平台 utf-8。"""
+    if os.name == "nt":
+        try:
+            "x".encode("mbcs")
+            return "mbcs"
+        except LookupError:  # pragma: no cover - 非中文/西欧 Windows 语言的极端情形
+            pass
+    return "utf-8"
+
+
+def _write_cmd_script(command: str) -> Path:
+    """把命令原文写入临时 .bat（由 cmd.exe 原生解析引号与转义）。
+
+    Args:
+        command: 原始命令（保持原样写入，不做任何转义改写）
+
+    Returns:
+        临时批处理文件路径（调用方负责删除）
+
+    Raises:
+        OSError: 临时文件写入失败（由 BaseTool 兜底转为 error 结果）
+    """
+    fd, raw_path = tempfile.mkstemp(prefix="wra_cmd_", suffix=".bat")
+    os.close(fd)
+    script_path = Path(raw_path)
+    payload = f"@echo off\r\n{command}\r\nexit /b %errorlevel%\r\n"
+    try:
+        script_path.write_bytes(payload.encode(_script_encoding(), errors="replace"))
+    except OSError:
+        script_path.unlink(missing_ok=True)
+        raise
+    return script_path
+
+
 class ShellRunTool(BaseTool):
-    """shell.run — 执行 shell 命令。"""
+    """shell.run — 执行 shell 命令。
+
+    2026-09-16（P1-4 修复）：cmd 分支在命令含内嵌引号时改走临时 .bat，
+    避免 Windows list2cmdline 的 ``\\"`` 转义被 cmd.exe 误解析导致
+    带引号路径变成"伪 FILE_NOT_FOUND"（0x80070002）。
+    """
 
     name = "shell.run"
     description = (
@@ -82,15 +130,26 @@ class ShellRunTool(BaseTool):
             }
 
         if shell == "powershell":
-            argv = [
+            argv: list[str] = [
                 "powershell.exe",
                 "-NoProfile",
                 "-NonInteractive",
                 "-Command",
                 command,
             ]
+            script_path: Path | None = None
+        elif _needs_cmd_script(command):
+            # P1-4 修复（2026-09-16 实测）：cmd.exe 不认 MSVCRT 的 \" 转义——
+            # subprocess 传列表时 Windows 用 list2cmdline 把内嵌 " 变成 \"，
+            # cmd 又把 \ 当字面量 → 带引号路径被破坏成本不存在的路径
+            # （certutil 报 0x80070002 FILE_NOT_FOUND，误导成"样本不存在"）。
+            # 修法：命令原文落到临时 .bat，由 cmd.exe 自己解析引号（等价于人工敲进 cmd）。
+            script_path = _write_cmd_script(command)
+            argv = ["cmd.exe", "/c", str(script_path)]
         else:
+            # 无内嵌引号的命令继续沿用原 argv 形态（行为与既有测试保持一致）
             argv = ["cmd.exe", "/c", command]
+            script_path = None
 
         workdir = str(Path(cwd).resolve()) if cwd else None
         try:
@@ -112,6 +171,9 @@ class ShellRunTool(BaseTool):
                 "error_message": f"命令超时（>{timeout}s）已被终止",
                 "timed_out": True,
             }
+        finally:
+            if script_path is not None:
+                script_path.unlink(missing_ok=True)
 
         stdout = (completed.stdout or "")[:_OUTPUT_TRUNCATE]
         stderr = (completed.stderr or "")[:_OUTPUT_TRUNCATE]
