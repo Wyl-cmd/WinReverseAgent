@@ -193,10 +193,6 @@ class ToolUpdater:
         entry = next((t for t in tools if isinstance(t, dict) and t.get("name") == name), None)
         if entry is None:
             raise KeyError(f"工具未在 manifest 中登记: {name}")
-        if not isinstance(entry, dict):
-            raise ValueError(
-                f"manifest.yaml 中 {name} 配置项应为字典，实际为 {type(entry).__name__}"
-            )
         return entry
 
     def _get_update_config(self) -> dict[str, Any]:
