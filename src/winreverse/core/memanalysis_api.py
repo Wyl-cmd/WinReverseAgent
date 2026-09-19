@@ -398,14 +398,9 @@ def extract_iocs_from_text(text: str) -> list[IocHit]:
         IocHit 列表（offset 为文本内字符偏移）
     """
     iocs: list[IocHit] = []
-    seen: set[tuple[str, str, int]] = set()
     for kind, pattern in _IOC_PATTERNS.items():
         for m in pattern.finditer(text):
             value = m.group().rstrip(".,;:)]}\"'")
-            key = (kind, value, m.start())
-            if key in seen:
-                continue
-            seen.add(key)
             iocs.append(IocHit(kind=kind, value=value, offset=m.start()))
     return iocs
 
